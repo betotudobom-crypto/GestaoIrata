@@ -290,7 +290,6 @@
     const diaSemana = (iso) => DIAS_SEMANA[new Date(iso + 'T00:00:00Z').getUTCDay()];
     // Datas cobertas por um conjunto de logbooks (do primeiro embarque ao último desembarque)
     const datasDosLogbooks = (lbs) => { const com = lbs.filter(l => l.embarqueInicio && l.embarqueFim); if (!com.length) return []; return datasEntre(com.map(l => l.embarqueInicio).sort()[0], com.map(l => l.embarqueFim).sort().slice(-1)[0]); };
-    const confirmar = (msg) => window.confirm(msg);
 
     function App() {
       const [darkMode, setDarkMode] = useState(false);
@@ -333,11 +332,16 @@
       const supervisoresN3List = usuariosCadastrados.filter(u => u.perfil === 'SUPERVISOR' && u.status === 'APROVADO');
 
       const [equipamentos, setEquipamentos] = useState([
-        { id: 1, equipamento: 'Croll', fabricante: 'Petzl', tag: 'AASJ-EQU-101', kit: '10', status: 'Operacional' },
-        { id: 2, equipamento: 'Ascender Basic', fabricante: 'Petzl', tag: 'AASJ-EQU-102', kit: '10', status: 'Operacional' }
+        { id: 1, equipamento: 'Croll', fabricante: 'Petzl', tag: 'AASJ-EQU-101', kit: '10', status: 'Operacional', unidade: 'POLVO A' },
+        { id: 2, equipamento: 'Ascender Basic', fabricante: 'Petzl', tag: 'AASJ-EQU-102', kit: '10', status: 'Operacional', unidade: 'POLVO A' },
+        { id: 3, equipamento: 'Rig', fabricante: 'Petzl', tag: 'AASJ-EQU-201', kit: '12', status: 'Operacional', unidade: 'BRAVO' },
+        { id: 4, equipamento: 'ASAP Lock', fabricante: 'Petzl', tag: 'AASJ-EQU-202', kit: '12', status: 'Operacional', unidade: 'BRAVO' },
+        { id: 5, equipamento: 'Avao Bod Fast', fabricante: 'Petzl', tag: 'AASJ-EQU-301', kit: '15', status: 'Operacional', unidade: 'P-50' }
       ]);
       const [showModalInv, setShowModalInv] = useState(false);
-      const [novoEquipamento, setNovoEquipamento] = useState({ equipamento: '', fabricante: '', tag: '', kit: '', status: 'Operacional' });
+      const novoEquipamentoVazio = () => ({ equipamento: '', fabricante: '', tag: '', kit: '', status: 'Operacional', unidade: unidadePadrao() });
+      const [novoEquipamento, setNovoEquipamento] = useState(novoEquipamentoVazio);
+      const [erroInv, setErroInv] = useState('');
 
       const [entregas, setEntregas] = useState([{ id: 1, supervisorN3: 'Herbert Aquino', kit: '10', usuario: 'Igor das Neves', condRetirada: 'BOM', dataRetirada: '2026-03-01' }]);
       const [showModalFO48, setShowModalFO48] = useState(false);
@@ -404,6 +408,10 @@
       const novoDanoVazio = { equipamentoTag: '', falha: '', acao: 'substituir', urgencia: 'urgente', foto: '' };
       const [novoDano, setNovoDano] = useState(novoDanoVazio);
       const [decisao, setDecisao] = useState(null); // janela de decisão do gestor
+      // Confirmação dentro do app (o confirm() do navegador é bloqueado em previews, apps de mensagem e alguns celulares)
+      const [pergunta, setPergunta] = useState(null); // { titulo, texto, rotulo, onOk } — sem onOk vira só um aviso
+      const pedirConfirmacao = (titulo, texto, onOk, rotulo = 'Excluir') => setPergunta({ titulo, texto, onOk, rotulo });
+      const avisar = (titulo, texto) => setPergunta({ titulo, texto });
       const [erroDecisao, setErroDecisao] = useState('');
       const [fotoAmpliada, setFotoAmpliada] = useState('');
       const [historicoAberto, setHistoricoAberto] = useState({});
@@ -452,6 +460,7 @@
 
       /* Unidades: cadastro e remoção pelo gestor */
       const docsDaUnidade = (u) => [...logbooks, ...checklistsKits, ...avaliacoes].filter(d => d.unidade === u).length;
+      const tagsDaUnidade = (u) => equipamentos.filter(eq => eq.unidade === u).length;
       const adicionarUnidade = (e) => {
         e.preventDefault();
         const nome = novaUnidade.trim().toUpperCase().replace(/\s+/g, ' ');
@@ -460,10 +469,16 @@
         setUnidades([...unidades, nome]); setNovaUnidade(''); setErroUnidade('');
       };
       const removerUnidade = (u) => {
-        if (docsDaUnidade(u) > 0) return;
-        if (!confirmar(`Remover a unidade ${u}?`)) return;
-        setUnidades(unidades.filter(x => x !== u));
-        if (filtroUnidade === u) setFiltroUnidade('');
+        const docs = docsDaUnidade(u), tags = tagsDaUnidade(u);
+        if (docs > 0 || tags > 0) {
+          const partes = [docs ? `${docs} documento${docs === 1 ? '' : 's'}` : '', tags ? `${tags} TAG${tags === 1 ? '' : 's'} no inventário` : ''].filter(Boolean).join(' e ');
+          avisar(`A unidade ${u} está em uso`, `Ela tem ${partes}. Para remover a unidade, mova ou exclua esses registros antes.`);
+          return;
+        }
+        pedirConfirmacao(`Remover a unidade ${u}?`, 'Ela deixa de aparecer nos formulários dos supervisores.', () => {
+          setUnidades(prev => prev.filter(x => x !== u));
+          if (filtroUnidade === u) setFiltroUnidade('');
+        }, 'Remover');
       };
 
       // Lança horas numa data; só aceita datas dentro do período de embarque do colaborador
@@ -484,7 +499,13 @@
         }));
       };
 
-      const submitInv = (e) => { e.preventDefault(); setEquipamentos([...equipamentos, { id: Date.now(), ...novoEquipamento }]); setShowModalInv(false); setNovoEquipamento({equipamento:'', fabricante:'', tag:'', kit:'', status:'Operacional'}); };
+      const abrirNovoInv = () => { setNovoEquipamento({ ...novoEquipamentoVazio(), unidade: filtroUnidade || unidadePadrao() }); setErroInv(''); setShowModalInv(true); };
+      const submitInv = (e) => {
+        e.preventDefault();
+        const tag = novoEquipamento.tag.trim().toUpperCase();
+        if (equipamentos.some(eq => eq.tag.toUpperCase() === tag)) { setErroInv(`A TAG ${tag} já existe no inventário.`); return; }
+        setEquipamentos([...equipamentos, { id: Date.now(), ...novoEquipamento, tag }]); setShowModalInv(false); setNovoEquipamento(novoEquipamentoVazio()); setErroInv('');
+      };
       const submitFO48 = (e) => { e.preventDefault(); setEntregas([...entregas, { id: Date.now(), supervisorN3: usuarioLogado.nome, ...novaEntrega }]); setShowModalFO48(false); };
       /* CL-01: criar, editar e excluir */
       const abrirNovoCL01 = () => { setEditCL01Id(null); setNovoCL01(novoCL01Vazio()); setShowModalCL01(true); };
@@ -495,7 +516,7 @@
         else setChecklistsKits([...checklistsKits, { id: Date.now(), supervisorN3: usuarioLogado.nome, ...novoCL01 }]);
         setShowModalCL01(false); setEditCL01Id(null);
       };
-      const excluirCL01 = (c) => { if (confirmar(`Excluir o checklist ${c.ptNum} de ${c.data}?`)) setChecklistsKits(checklistsKits.filter(x => x.id !== c.id)); };
+      const excluirCL01 = (c) => pedirConfirmacao(`Excluir o checklist ${c.ptNum}?`, `Checklist de ${fmtData(c.data)}. Esta ação não pode ser desfeita.`, () => setChecklistsKits(prev => prev.filter(x => x.id !== c.id)));
 
       /* FO-45: vincular/trocar colaborador e excluir linha */
       const abrirNovoFO45 = () => { setEditFO45Id(null); setPessoaSelecionadaFO45(''); setUnidadeFO45(unidadePadrao()); setEmbarqueFO45(embarquePadrao); setErroFO45(''); setShowModalFO45(true); };
@@ -511,16 +532,20 @@
           // Se o período encolheu, as horas lançadas fora dele são descartadas (com confirmação)
           const atual = logbooks.find(lb => lb.id === editFO45Id);
           const fora = [...Object.entries(atual.horas || {}), ...Object.entries(atual.horasSem || {})].filter(([iso]) => iso < periodo.embarqueInicio || iso > periodo.embarqueFim);
-          if (fora.length && !confirmar(`${fora.reduce((a, [, v]) => a + v, 0)}h lançadas em ${fora.length} dia(s) ficam fora do novo período e serão removidas. Continuar?`)) return;
-          const recorta = (mapa) => Object.fromEntries(Object.entries(mapa || {}).filter(([iso]) => iso >= periodo.embarqueInicio && iso <= periodo.embarqueFim));
-          const horas = recorta(atual.horas), horasSem = recorta(atual.horasSem);
-          setLogbooks(logbooks.map(lb => lb.id === editFO45Id ? { ...lb, ...periodo, horas, horasSem, unidade: unidadeFO45, colaborador: colab.nome, nivel: colab.nivel, funcao: colab.funcao } : lb));
+          const aplicar = () => {
+            const recorta = (mapa) => Object.fromEntries(Object.entries(mapa || {}).filter(([iso]) => iso >= periodo.embarqueInicio && iso <= periodo.embarqueFim));
+            const horas = recorta(atual.horas), horasSem = recorta(atual.horasSem);
+            setLogbooks(prev => prev.map(lb => lb.id === editFO45Id ? { ...lb, ...periodo, horas, horasSem, unidade: unidadeFO45, colaborador: colab.nome, nivel: colab.nivel, funcao: colab.funcao } : lb));
+            setShowModalFO45(false); setEditFO45Id(null);
+          };
+          if (fora.length) { pedirConfirmacao('Encurtar o período de embarque?', `${fora.reduce((a, [, v]) => a + v, 0)}h lançadas em ${fora.length} dia(s) ficam fora do novo período e serão removidas.`, aplicar, 'Remover horas e salvar'); return; }
+          aplicar(); return;
         }
         else setLogbooks([...logbooks, { id: Date.now(), supervisorN3: usuarioLogado.nome, ...periodo, unidade: unidadeFO45, colaborador: colab.nome, nivel: colab.nivel, funcao: colab.funcao, horas: {}, horasSem: {} }]);
         setShowModalFO45(false); setEditFO45Id(null);
       };
-      const zerarFO45 = (lb) => { if (confirmar(`Zerar todas as horas de ${lb.colaborador}?`)) setLogbooks(logbooks.map(x => x.id === lb.id ? { ...x, horas: {}, horasSem: {} } : x)); };
-      const excluirFO45 = (lb) => { if (confirmar(`Remover ${lb.colaborador} do logbook? As horas lançadas serão perdidas.`)) setLogbooks(logbooks.filter(x => x.id !== lb.id)); };
+      const zerarFO45 = (lb) => pedirConfirmacao(`Zerar as horas de ${lb.colaborador}?`, 'Todas as horas lançadas no logbook dele serão apagadas.', () => setLogbooks(prev => prev.map(x => x.id === lb.id ? { ...x, horas: {}, horasSem: {} } : x)), 'Zerar horas');
+      const excluirFO45 = (lb) => pedirConfirmacao(`Remover ${lb.colaborador} do logbook?`, 'As horas lançadas serão perdidas.', () => setLogbooks(prev => prev.filter(x => x.id !== lb.id)), 'Remover');
 
       const notificar = (para, dados) => setNotificacoes(prev => [{ id: Date.now() + Math.random(), para, data: new Date().toISOString(), lida: false, ...dados }, ...prev]);
 
@@ -627,7 +652,7 @@
       const confirmarRecebimento = (d) => {
         const s = d.substituto;
         setEquipamentos(prev => [...prev.map(eq => eq.tag === d.equipamentoTag ? { ...eq, status: 'CONDENADO' } : eq),
-          { id: Date.now(), equipamento: s.equipamento, fabricante: s.fabricante, tag: s.tag, kit: d.kit || '', status: 'Operacional' }]);
+          { id: Date.now(), equipamento: s.equipamento, fabricante: s.fabricante, tag: s.tag, kit: d.kit || '', status: 'Operacional', unidade: (prev.find(eq => eq.tag === d.equipamentoTag) || {}).unidade || unidadePadrao() }]);
         atualizarDano(d.id, { etapa: 'encerrado', resultado: 'Substituído', status: 'Substituído', recebidoEm: agoraISO(), encerradoEm: agoraISO() }, 'Substituto recebido', `${s.tag} incluído no kit ${d.kit || '—'}; ${d.equipamentoTag} baixado como condenado`);
         marcarNotifsDanoLidas(d.id, usuarioLogado.nome);
         notificar('GESTOR', { tipo: 'ciente', danoId: d.id, titulo: `Troca concluída · ${d.equipamentoTag}`, texto: `${usuarioLogado.nome} confirmou o recebimento de ${s.equipamento} ${s.tag}. Caso encerrado.` });
@@ -651,7 +676,7 @@
         else setAvaliacoes([...avaliacoes, { id: Date.now(), supervisorN3: usuarioLogado.nome, ...novaAvaliacao, notas, colaborador: colab.nome, funcao: colab.funcao, soma }]);
         setShowModalFO41(false); setEditFO41Id(null);
       };
-      const excluirFO41 = (av) => { if (confirmar(`Excluir a avaliação de ${av.colaborador}?`)) setAvaliacoes(avaliacoes.filter(x => x.id !== av.id)); };
+      const excluirFO41 = (av) => pedirConfirmacao(`Excluir a avaliação de ${av.colaborador}?`, 'Esta ação não pode ser desfeita.', () => setAvaliacoes(prev => prev.filter(x => x.id !== av.id)));
       const setNota = (i, v) => { const notas = [...novaAvaliacao.notas]; notas[i] = v; setNovaAvaliacao({ ...novaAvaliacao, notas }); };
 
       const filtrarItemOperacional = (item) => usuarioLogado?.perfil === 'GESTOR'
@@ -755,7 +780,7 @@
       const secoes = isGestor ? [
         { id: 'painel', icon: 'layout-dashboard', label: 'Painel', tabs: ['painel'] },
         { id: 'documentos', icon: 'folder-open', label: 'Documentos N3', tabs: ['fo45', 'cl01', 'fo41'] },
-        { id: 'equipamentos', icon: 'shield-alert', label: 'Equipamentos', tabs: ['auditoria', 'quarentena'], count: danosReports.filter(d => ['reportado', 'ciente', 'troca_aprovada', 'inspecao'].includes(d.etapa)).length, tone: 'rose' },
+        { id: 'equipamentos', icon: 'shield-alert', label: 'Equipamentos', tabs: ['auditoria', 'quarentena', 'inv'], count: danosReports.filter(d => ['reportado', 'ciente', 'troca_aprovada', 'inspecao'].includes(d.etapa)).length, tone: 'rose' },
         { id: 'equipe', icon: 'users', label: 'Equipe e unidades', tabs: ['autorizacoes', 'unidades'], count: pendentes.length, tone: 'amber' },
       ] : [
         { id: 'documentos', icon: 'folder-open', label: 'Documentos N3', tabs: ['fo45', 'cl01', 'fo41'] },
@@ -790,18 +815,20 @@
         'fo48': ['Controle de Custódia de EPIs (FO-48)', 'Controle de custódia e retirada de kits de equipamentos.'],
         'rl32': ['Danos e trocas (RL-32)', 'Ao reportar, o equipamento vai para quarentena e o gestor é notificado. Acompanhe aqui até a troca chegar.'],
         'fo41': ['Avaliação Comportamental (FO-41)', 'Avaliação comportamental e de desempenho dos escaladores, em 10 critérios.'],
-        'inv': ['Inventário Geral de TAGs', 'Inventário de TAGs e controle de status operacional.'],
+        'inv': ['Inventário por unidade', 'TAGs de cada unidade e seu status operacional. Escolha uma unidade para ver só o inventário dela.'],
       };
       const tituloPagina = secaoAtual.label;
       const descPagina = (paginas[activeTab] || ['', ''])[1];
 
-      const acoes = isGestor ? {} : {
+      const acoes = isGestor ? {
+        inv: { label: 'Adicionar TAG', icon: 'plus', onClick: abrirNovoInv },
+      } : {
         fo45: { label: 'Adicionar colaborador', icon: 'user-plus', onClick: abrirNovoFO45 },
         cl01: { label: 'Novo checklist', icon: 'plus', onClick: abrirNovoCL01 },
         fo48: { label: 'Registrar retirada', icon: 'plus', onClick: () => setShowModalFO48(true) },
         rl32: { label: 'Reportar dano', icon: 'alert-triangle', variant: 'danger', onClick: () => setShowModalRL32(true) },
         fo41: { label: 'Nova avaliação', icon: 'plus', onClick: abrirNovoFO41 },
-        inv: { label: 'Adicionar TAG', icon: 'plus', onClick: () => setShowModalInv(true) },
+        inv: { label: 'Adicionar TAG', icon: 'plus', onClick: abrirNovoInv },
       };
       const acao = acoes[activeTab];
 
@@ -812,6 +839,7 @@
         logado: true, secoes, irPara,
         alternarNotif: () => setNotifAberto(v => !v),
         camadas: [
+          [!!pergunta, () => setPergunta(null)],
           [!!fotoAmpliada, () => setFotoAmpliada('')],
           [ajudaTeclado, () => setAjudaTeclado(false)],
           [!!modalColab, () => setModalColab(null)],
@@ -1235,17 +1263,17 @@
                 </form>
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                   {unidades.map(u => {
-                    const qtd = docsDaUnidade(u);
+                    const qtd = docsDaUnidade(u); const tags = tagsDaUnidade(u); const emUso = qtd + tags > 0;
                     return (
                       <li key={u} className="px-5 py-3 flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400"><Icon name="anchor" className="w-4 h-4" /></div>
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-sm text-slate-900 dark:text-white">{u}</p>
-                          <p className="text-xs text-slate-500">{qtd} documento{qtd === 1 ? '' : 's'}</p>
+                          <p className="text-xs text-slate-500">{qtd} documento{qtd === 1 ? '' : 's'} · {tags} TAG{tags === 1 ? '' : 's'} no inventário{emUso && <span className="text-slate-400"> · em uso</span>}</p>
                         </div>
-                        <button type="button" onClick={() => removerUnidade(u)} disabled={qtd > 0}
-                          title={qtd > 0 ? 'Não é possível remover: há documentos nesta unidade' : 'Remover unidade'}
-                          className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 disabled:cursor-not-allowed">
+                        <button type="button" onClick={() => removerUnidade(u)} aria-label={`Remover unidade ${u}`}
+                          title={emUso ? 'Unidade em uso: toque para ver o motivo' : 'Remover unidade'}
+                          className={`p-2 rounded-lg transition ${emUso ? 'text-slate-300 dark:text-slate-600 hover:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800' : 'text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10'}`}>
                           <Icon name="trash-2" className="w-4 h-4" />
                         </button>
                       </li>
@@ -1272,7 +1300,7 @@
                           <div className="p-2.5 rounded-xl bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"><Icon name="shield-alert" className="w-5 h-5" /></div>
                           <div>
                             <p className="font-semibold text-sm text-slate-900 dark:text-white">{eq.equipamento} <span className="font-normal text-slate-500">· {eq.fabricante}</span></p>
-                            <p className="text-xs text-slate-500 font-mono mt-0.5">TAG {eq.tag} · Kit {eq.kit}</p>
+                            <p className="text-xs text-slate-500 font-mono mt-0.5">TAG {eq.tag} · Kit {eq.kit}{eq.unidade ? ` · ${eq.unidade}` : ''}</p>
                           </div>
                         </div>
                         <Btn size="sm" variant="soft" icon="unlock" onClick={() => liberarQuarentena(eq.tag)}>Liberar quarentena</Btn>
@@ -1702,26 +1730,82 @@
               );
             })()}
 
-            {/* ABA INVENTÁRIO */}
-            {!isGestor && activeTab === 'inv' && (
-              <Card className="overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead><tr><th className={thCls}>TAG</th><th className={thCls}>Equipamento</th><th className={thCls}>Fabricante</th><th className={thCls}>Status</th></tr></thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {equipamentos.map(eq => (
-                        <tr key={eq.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                          <td className={tdCls + " font-mono text-xs font-semibold text-slate-700 dark:text-slate-200"}>{eq.tag}</td>
-                          <td className={tdCls + " font-semibold text-slate-900 dark:text-white"}>{eq.equipamento}</td>
-                          <td className={tdCls + " text-slate-500"}>{eq.fabricante}</td>
-                          <td className={tdCls}><Badge tone={eq.status === 'QUARENTENA' ? 'rose' : eq.status === 'CONDENADO' ? 'slate' : 'green'} dot>{eq.status}</Badge></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {/* ABA INVENTÁRIO (gestor e supervisor): resumo por unidade + lista filtrada */}
+            {activeTab === 'inv' && (() => {
+              const semUnidade = equipamentos.filter(eq => !eq.unidade || !unidades.includes(eq.unidade));
+              const resumo = (lista) => ({
+                total: lista.length,
+                operacional: lista.filter(eq => eq.status === 'Operacional').length,
+                quarentena: lista.filter(eq => eq.status === 'QUARENTENA').length,
+              });
+              const cartoes = [
+                { id: '', nome: 'Todas as unidades', lista: equipamentos },
+                ...unidades.map(u => ({ id: u, nome: u, lista: equipamentos.filter(eq => eq.unidade === u) })),
+                ...(semUnidade.length ? [{ id: '__sem__', nome: 'Sem unidade', lista: semUnidade }] : []),
+              ];
+              const lista = filtroUnidade === '__sem__' ? semUnidade : filtroUnidade ? equipamentos.filter(eq => eq.unidade === filtroUnidade) : equipamentos;
+              return (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {cartoes.map(c => {
+                      const r = resumo(c.lista); const ativo = filtroUnidade === c.id;
+                      return (
+                        <button key={c.id || 'todas'} onClick={() => setFiltroUnidade(c.id)} aria-pressed={ativo}
+                          className={`text-left p-4 rounded-2xl border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${ativo
+                            ? 'bg-brand-50 border-brand-300 dark:bg-brand-500/10 dark:border-brand-500/40'
+                            : 'bg-white border-slate-200 hover:border-slate-300 dark:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700'}`}>
+                          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            <Icon name={c.id ? 'anchor' : 'layers'} className="w-3.5 h-3.5" />{c.nome}
+                          </div>
+                          <p className="mt-2 font-display text-2xl font-semibold text-slate-900 dark:text-white tabular-nums">{r.total} <span className="text-sm font-sans font-medium text-slate-500">TAG{r.total === 1 ? '' : 's'}</span></p>
+                          <p className="mt-1 text-xs text-slate-500 tabular-nums">
+                            {r.operacional} operacional{r.operacional === 1 ? '' : 'is'}
+                            {r.quarentena > 0 && <span className="text-red-600 dark:text-red-400"> · {r.quarentena} em quarentena</span>}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <Card className="overflow-hidden">
+                    {lista.length === 0 ? (
+                      <EmptyState icon="package" title="Nenhuma TAG nesta unidade" text="Use o botão Adicionar TAG para cadastrar o primeiro equipamento." />
+                    ) : (<>
+                      {/* Celular: um cartão por TAG, com status visível sem rolar */}
+                      <ul className="sm:hidden divide-y divide-slate-100 dark:divide-slate-800">
+                        {lista.map(eq => (
+                          <li key={eq.id} className="p-4 flex items-start gap-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm text-slate-900 dark:text-white">{eq.equipamento} <span className="font-normal text-slate-500">· {eq.fabricante}</span></p>
+                              <p className="font-mono text-xs font-semibold text-slate-700 dark:text-slate-200 mt-1">{eq.tag}</p>
+                              <p className="text-xs text-slate-500 mt-1">{eq.unidade || 'Sem unidade'}{eq.kit ? ` · Kit ${eq.kit}` : ''}</p>
+                            </div>
+                            <Badge tone={eq.status === 'QUARENTENA' ? 'rose' : eq.status === 'CONDENADO' ? 'slate' : 'green'} dot>{eq.status}</Badge>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="hidden sm:block overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead><tr><th className={thCls}>TAG</th><th className={thCls}>Equipamento</th><th className={thCls}>Fabricante</th><th className={thCls}>Unidade</th><th className={thCls}>Kit</th><th className={thCls}>Status</th></tr></thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                            {lista.map(eq => (
+                              <tr key={eq.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                                <td className={tdCls + " font-mono text-xs font-semibold text-slate-700 dark:text-slate-200"}>{eq.tag}</td>
+                                <td className={tdCls + " font-semibold text-slate-900 dark:text-white"}>{eq.equipamento}</td>
+                                <td className={tdCls + " text-slate-500"}>{eq.fabricante}</td>
+                                <td className={tdCls + " text-slate-600 dark:text-slate-300"}>{eq.unidade || '—'}</td>
+                                <td className={tdCls + " text-slate-500 tabular-nums"}>{eq.kit || '—'}</td>
+                                <td className={tdCls}><Badge tone={eq.status === 'QUARENTENA' ? 'rose' : eq.status === 'CONDENADO' ? 'slate' : 'green'} dot>{eq.status}</Badge></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>)}
+                  </Card>
                 </div>
-              </Card>
-            )}
+              );
+            })()}
 
             </div>
 
@@ -1731,7 +1815,16 @@
                 <form onSubmit={submitInv} className="space-y-4">
                   <Field label="Nome do equipamento"><input required type="text" placeholder="Ex: Croll" value={novoEquipamento.equipamento} onChange={e=>setNovoEquipamento({...novoEquipamento, equipamento:e.target.value})} className={inputCls} /></Field>
                   <Field label="Fabricante"><input required type="text" placeholder="Ex: Petzl" value={novoEquipamento.fabricante} onChange={e=>setNovoEquipamento({...novoEquipamento, fabricante:e.target.value})} className={inputCls} /></Field>
-                  <Field label="TAG interno"><input required type="text" placeholder="Ex: AASJ-EQU-103" value={novoEquipamento.tag} onChange={e=>setNovoEquipamento({...novoEquipamento, tag:e.target.value})} className={inputCls + " font-mono"} /></Field>
+                  <Field label="TAG interno"><input required type="text" placeholder="Ex: AASJ-EQU-103" value={novoEquipamento.tag} onChange={e=>{ setNovoEquipamento({...novoEquipamento, tag:e.target.value}); setErroInv(''); }} className={inputCls + " font-mono"} /></Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Unidade">
+                      <select required value={novoEquipamento.unidade} onChange={e=>setNovoEquipamento({...novoEquipamento, unidade:e.target.value})} className={inputCls}>
+                        {unidades.map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Kit"><input type="text" placeholder="Ex: 10" value={novoEquipamento.kit} onChange={e=>setNovoEquipamento({...novoEquipamento, kit:e.target.value})} className={inputCls} /></Field>
+                  </div>
+                  {erroInv && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{erroInv}</p>}
                   <ModalActions onCancel={() => setShowModalInv(false)} submitLabel="Salvar" />
                 </form>
               </Modal>
@@ -2024,6 +2117,18 @@
                   </div>
                   {erroColab && <p className="text-xs text-red-600 flex items-center gap-1.5"><Icon name="alert-circle" className="w-3.5 h-3.5" />{erroColab}</p>}
                   <ModalActions onCancel={() => setModalColab(null)} submitLabel="Cadastrar e selecionar" />
+                </form>
+              </Modal>
+            )}
+
+            {/* Confirmação/aviso dentro do app — sempre por cima das outras janelas */}
+            {pergunta && (
+              <Modal title={pergunta.titulo} icon={pergunta.onOk ? 'alert-triangle' : 'info'} tone={pergunta.onOk ? 'rose' : 'emerald'} onClose={() => setPergunta(null)}>
+                <form onSubmit={(e) => { e.preventDefault(); const ok = pergunta.onOk; setPergunta(null); ok && ok(); }} className="space-y-4">
+                  {pergunta.texto && <p className="text-sm text-slate-600 dark:text-slate-300">{pergunta.texto}</p>}
+                  {pergunta.onOk
+                    ? <ModalActions onCancel={() => setPergunta(null)} submitLabel={pergunta.rotulo} variant="danger" />
+                    : <div className="pt-3"><Btn type="submit" size="lg" className="w-full">Entendi</Btn></div>}
                 </form>
               </Modal>
             )}

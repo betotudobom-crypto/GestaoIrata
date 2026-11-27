@@ -1,0 +1,2039 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechOcean | AASJ - Gestão Integrada de Acesso por Cordas</title>
+  <link rel="icon" href="assets/emblema.jpg" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Tipografia: Barlow Semi Condensed (títulos e números), Barlow (texto) e IBM Plex Mono (TAGs e registros) -->
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Barlow', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            display: ['"Barlow Semi Condensed"', 'Barlow', 'ui-sans-serif', 'sans-serif'],
+            mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace']
+          },
+          colors: {
+            // Paleta da marca TechOcean | AASJ (azul do emblema + azul "OCEAN" do logotipo)
+            brand: { 50: '#eef6fc', 100: '#d8eaf8', 200: '#b4d6f1', 300: '#7ab6e0', 400: '#4692cc', 500: '#1f6fb5', 600: '#0b5299', 700: '#06387d', 800: '#062f64', 900: '#062449', 950: '#041a35' },
+            ink: '#2f5164'
+          }
+        }
+      }
+    }
+  </script>
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* Barlow: visual industrial/offshore. Títulos e números em Barlow Semi Condensed */
+    body { font-size: 15px; }
+    h1, h2, h3, h4, .font-display, .text-2xl, .text-3xl, .text-4xl {
+      font-family: 'Barlow Semi Condensed', 'Barlow', sans-serif;
+      letter-spacing: 0.002em;
+    }
+    h1, h2, .text-2xl, .text-3xl, .text-4xl { font-weight: 700; }
+    h3, h4 { font-weight: 600; font-size: 1.02em; }
+    /* Cabeçalhos de tabela em caixa alta com respiro, como no "SERVIÇOS INDUSTRIAIS" do logo */
+    th { font-family: 'Barlow Semi Condensed', sans-serif; font-size: 12px !important; letter-spacing: 0.09em !important; }
+    .font-mono { letter-spacing: -0.01em; }
+    /* Dias fora do período de embarque na grade de horas */
+    .bg-hatch { background: repeating-linear-gradient(135deg, rgba(148,163,184,.14) 0 4px, transparent 4px 8px); }
+    @media print {
+      body * { visibility: hidden; }
+      #modal-auditoria, #modal-auditoria * { visibility: visible; }
+      #modal-auditoria { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; border: none; }
+      .print-hidden { display: none !important; }
+    }
+    ::-webkit-scrollbar { height: 8px; width: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.35); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+    ::-webkit-scrollbar-thumb:hover { background-color: rgba(148, 163, 184, 0.6); }
+    input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="number"] { -moz-appearance: textfield; }
+
+    @keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
+    @keyframes pop-in { from { opacity: 0; transform: translateY(8px) scale(.98) } to { opacity: 1; transform: none } }
+    @keyframes slide-in { from { transform: translateX(-100%) } to { transform: none } }
+    .anim-fade { animation: fade-in .18s ease-out both; }
+    .anim-pop { animation: pop-in .22s cubic-bezier(.2,.8,.2,1) both; }
+    .anim-slide { animation: slide-in .22s cubic-bezier(.2,.8,.2,1) both; }
+    .bg-grid {
+      background-image: linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+    @media (prefers-reduced-motion: reduce) { .anim-fade, .anim-pop, .anim-slide { animation: none; } }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased transition-colors duration-200 min-h-screen font-sans">
+
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // Campo de texto em foco? (atalhos de letra não devem disparar enquanto o usuário digita)
+    const digitando = (el) => el && (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable);
+
+    /* ---------- Componentes de interface ---------- */
+
+    function Icon({ name, className = "w-5 h-5" }) {
+      useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name, className]);
+      // A key força o React a recriar o ícone quando o nome muda (o lucide troca o <i> por <svg>).
+      return <span key={name + className} className="inline-flex shrink-0"><i data-lucide={name} className={className}></i></span>;
+    }
+
+    const inputCls = "w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm shadow-slate-900/[0.03] focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500 transition disabled:opacity-60";
+    const textareaCls = inputCls.replace('h-11', 'min-h-[110px] py-3') + " resize-y";
+
+    const btnVariants = {
+      primary: "bg-brand-600 hover:bg-brand-700 text-white shadow-sm shadow-brand-600/25",
+      danger: "bg-red-600 hover:bg-red-700 text-white shadow-sm shadow-red-600/25",
+      purple: "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-600/25",
+      outline: "border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200",
+      ghost: "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800",
+      soft: "bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-500/20",
+      softDanger: "bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-500/20",
+    };
+    const btnSizes = { sm: "h-8 px-3 text-xs gap-1.5", md: "h-10 px-4 text-sm gap-2", lg: "h-11 px-5 text-sm gap-2" };
+
+    function Btn({ variant = 'primary', size = 'md', icon, className = '', children, ...props }) {
+      return (
+        <button {...props} className={`inline-flex items-center justify-center font-semibold rounded-xl transition active:scale-[.98] focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/25 disabled:opacity-50 ${btnVariants[variant]} ${btnSizes[size]} ${className}`}>
+          {icon && <Icon name={icon} className={size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4'} />}
+          {children}
+        </button>
+      );
+    }
+
+    function Card({ className = '', children, ...props }) {
+      return <div {...props} className={`bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm shadow-slate-900/[0.03] ${className}`}>{children}</div>;
+    }
+
+    function Field({ label, children }) {
+      return (
+        <label className="block">
+          <span className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">{label}</span>
+          {children}
+        </label>
+      );
+    }
+
+    const badgeTones = {
+      emerald: "bg-brand-50 text-brand-700 ring-brand-600/15 dark:bg-brand-500/10 dark:text-brand-300 dark:ring-brand-400/20",
+      green: "bg-green-50 text-green-700 ring-green-600/15 dark:bg-green-500/10 dark:text-green-300 dark:ring-green-400/20",
+      rose: "bg-red-50 text-red-700 ring-red-600/15 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-400/20",
+      amber: "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/20",
+      violet: "bg-indigo-50 text-indigo-700 ring-indigo-600/15 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-400/20",
+      sky: "bg-sky-50 text-sky-700 ring-sky-600/15 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-400/20",
+      slate: "bg-slate-100 text-slate-600 ring-slate-500/15 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-400/20",
+    };
+    function Badge({ tone = 'slate', dot, className = '', children }) {
+      return (
+        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold ring-1 ring-inset whitespace-nowrap ${badgeTones[tone]} ${className}`}>
+          {dot && <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80"></span>}
+          {children}
+        </span>
+      );
+    }
+
+    function Avatar({ nome = '', tone = 'emerald', size = 'md' }) {
+      const iniciais = nome.split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
+      const tones = {
+        emerald: 'bg-brand-100 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300',
+        rose: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
+        violet: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300',
+        slate: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
+      };
+      const sizes = { sm: 'w-8 h-8 text-[11px]', md: 'w-10 h-10 text-xs' };
+      return <div className={`${sizes[size]} ${tones[tone]} rounded-full grid place-items-center font-bold shrink-0`}>{iniciais}</div>;
+    }
+
+    function EmptyState({ icon = 'inbox', title, text }) {
+      return (
+        <div className="py-12 px-6 text-center">
+          <div className="mx-auto w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 grid place-items-center mb-3">
+            <Icon name={icon} className="w-6 h-6" />
+          </div>
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</p>
+          {text && <p className="text-xs text-slate-500 mt-1">{text}</p>}
+        </div>
+      );
+    }
+
+    function Modal({ title, subtitle, icon = 'file-plus', tone = 'emerald', size = 'sm', onClose, children }) {
+      const tones = {
+        emerald: 'bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400',
+        rose: 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400',
+        violet: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400',
+      };
+      // Teclado: foca o primeiro campo ao abrir, Esc fecha (tratado no App) e Tab fica preso dentro da janela
+      const caixaRef = useRef(null);
+      useEffect(() => {
+        const el = caixaRef.current; if (!el) return;
+        const anterior = document.activeElement;
+        const primeiro = el.querySelector('input:not([type=hidden]):not([disabled]), select, textarea') || el.querySelector('button[type=submit]');
+        setTimeout(() => primeiro?.focus(), 30);
+        return () => { if (anterior && document.contains(anterior)) anterior.focus?.(); };
+      }, []);
+      const prenderTab = (e) => {
+        if (e.key !== 'Tab') return;
+        const focaveis = [...caixaRef.current.querySelectorAll('button:not([disabled]), input:not([disabled]):not([type=hidden]), select, textarea, [tabindex]:not([tabindex="-1"])')].filter(x => x.offsetParent !== null);
+        if (!focaveis.length) return;
+        const [primeiro, ultimo] = [focaveis[0], focaveis[focaveis.length - 1]];
+        if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+        else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
+      };
+      return (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/50 backdrop-blur-sm anim-fade" onKeyDown={prenderTab}>
+          <div ref={caixaRef} role="dialog" aria-modal="true" aria-label={title} className={`w-full ${size === 'md' ? 'sm:max-w-lg' : 'sm:max-w-md'} max-h-[92vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl anim-pop`}>
+            <div className="flex items-start gap-3 p-5 sm:p-6 pb-0 sm:pb-0">
+              <div className={`p-2.5 rounded-xl ${tones[tone]}`}><Icon name={icon} className="w-5 h-5" /></div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-base text-slate-900 dark:text-white">{title}</h3>
+                {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
+              </div>
+              <button type="button" onClick={onClose} aria-label="Fechar" className="p-1.5 -m-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                <Icon name="x" className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 sm:p-6">{children}</div>
+          </div>
+        </div>
+      );
+    }
+
+    function ModalActions({ onCancel, submitLabel, variant = 'primary' }) {
+      return (
+        <div className="flex flex-col-reverse sm:flex-row gap-2 pt-3">
+          <Btn type="button" variant="outline" size="lg" className="w-full sm:w-auto sm:flex-1" onClick={onCancel}>Cancelar</Btn>
+          <Btn type="submit" variant={variant} size="lg" className="w-full sm:w-auto sm:flex-1">{submitLabel}</Btn>
+        </div>
+      );
+    }
+
+    const thCls = "px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50/80 dark:bg-slate-800/40 border-b border-slate-200/80 dark:border-slate-800 whitespace-nowrap";
+    const tdCls = "px-4 py-3.5 whitespace-nowrap";
+
+    /* ---------- Aplicação ---------- */
+
+    // Limite máximo de horas por dia em acesso por cordas
+    const LIMITE_HORAS_DIA = 8;   // máximo de horas EM ACESSO (corda) por dia
+    const LIMITE_TOTAL_DIA = 12;  // máximo de horas com acesso + sem acesso no mesmo dia
+
+    // Unidades (plataformas) iniciais — o gestor cadastra novas em "Equipe e unidades"
+    const UNIDADES_INICIAIS = ['POLVO A', 'BRAVO', 'P-50'];
+
+    // Itens verificados no checklist diário (CL-01)
+    const ITENS_CHECKLIST = [
+      ['epi', 'EPIs e cinturões inspecionados'],
+      ['ancoragem', 'Ancoragens e linhas verificadas'],
+      ['resgate', 'Plano de resgate definido'],
+      ['isolamento', 'Área abaixo isolada e sinalizada'],
+      ['comunicacao', 'Comunicação por rádio testada'],
+      ['clima', 'Condições de vento e clima OK'],
+    ];
+    const checklistCompleto = () => Object.fromEntries(ITENS_CHECKLIST.map(([k]) => [k, true]));
+    const conformidadeCL = (c) => { const ok = ITENS_CHECKLIST.filter(([k]) => c.itens?.[k]).length; return { ok, total: ITENS_CHECKLIST.length, pct: Math.round(ok / ITENS_CHECKLIST.length * 100) }; };
+
+    // Critérios da avaliação comportamental (FO-41), nota de 0 a 10 cada (total 100)
+    const CRITERIOS_FO41 = [
+      'Cumprimento das normas de segurança', 'Uso correto de EPIs', 'Técnica em corda', 'Cuidado com equipamentos', 'Trabalho em equipe',
+      'Comunicação', 'Disciplina e pontualidade', 'Organização do posto', 'Proatividade', 'Qualidade da execução',
+    ];
+    const somaNotas = (notas) => notas.reduce((a, b) => a + Number(b || 0), 0);
+    const toneNota = (soma) => soma >= 80 ? 'green' : soma >= 60 ? 'amber' : 'rose';
+
+    // Relatório de danos (RL-32)
+    const ACOES_DANO = { substituir: 'Substituição do equipamento', inspecao: 'Inspeção / manutenção', registro: 'Apenas registro' };
+    const URGENCIAS = {
+      parada: ['Parou a atividade', 'rose', 'Sem o equipamento a equipe não trabalha'],
+      urgente: ['Urgente', 'amber', 'Precisa trocar logo, mas há alternativa'],
+      normal: ['Pode aguardar', 'slate', 'Pode seguir no próximo envio normal'],
+    };
+    const ETAPAS_DANO = {
+      reportado: ['Aguardando ciência', 'amber'],
+      ciente: ['Aguardando decisão', 'sky'],
+      troca_aprovada: ['Troca aprovada · a enviar', 'violet'],
+      enviado: ['Substituto a caminho', 'violet'],
+      inspecao: ['Em inspeção', 'amber'],
+      encerrado: ['Encerrado', 'green'],
+    };
+    const PASSOS_TROCA = ['Reportado', 'Ciente', 'Troca aprovada', 'Enviado', 'Recebido'];
+    const passoTroca = (d) => ({ reportado: 0, ciente: 1, troca_aprovada: 2, enviado: 3 }[d.etapa] ?? (d.resultado === 'Substituído' ? 4 : 1));
+
+    // Período de embarque: "01/03/26 a 15/03/26" e duração em dias
+    const fmtData = (iso) => { if (!iso) return ''; const [a, m, d] = iso.split('-'); return `${d}/${m}/${a.slice(2)}`; };
+    const diasPeriodo = (ini, fim) => ini && fim ? Math.round((new Date(fim) - new Date(ini)) / 86400000) + 1 : 0;
+    const fmtPeriodo = (lb) => lb.embarqueInicio && lb.embarqueFim ? `${fmtData(lb.embarqueInicio)} a ${fmtData(lb.embarqueFim)}` : 'Período não informado';
+
+    // Horas do logbook guardadas por data real: { '2026-03-01': 8, ... }
+    const horasLogbook = (lb) => Object.values(lb.horas || {}).reduce((a, b) => a + b, 0);          // horas COM acesso
+    const horasSemLogbook = (lb) => Object.values(lb.horasSem || {}).reduce((a, b) => a + b, 0);    // horas SEM acesso
+    const diasLogbook = (lb) => Object.values(lb.horas || {}).filter(v => v > 0).length;
+    const DIAS_SEMANA = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+    const addDias = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+    const datasEntre = (ini, fim) => { const out = []; if (!ini || !fim || fim < ini) return out; for (let d = ini; d <= fim && out.length < 120; d = addDias(d, 1)) out.push(d); return out; };
+    const dentroPeriodo = (lb, iso) => !!lb.embarqueInicio && iso >= lb.embarqueInicio && iso <= lb.embarqueFim;
+    const diaSemana = (iso) => DIAS_SEMANA[new Date(iso + 'T00:00:00Z').getUTCDay()];
+    // Datas cobertas por um conjunto de logbooks (do primeiro embarque ao último desembarque)
+    const datasDosLogbooks = (lbs) => { const com = lbs.filter(l => l.embarqueInicio && l.embarqueFim); if (!com.length) return []; return datasEntre(com.map(l => l.embarqueInicio).sort()[0], com.map(l => l.embarqueFim).sort().slice(-1)[0]); };
+    const confirmar = (msg) => window.confirm(msg);
+
+    function App() {
+      const [darkMode, setDarkMode] = useState(false);
+      const [menuAberto, setMenuAberto] = useState(false);
+
+      const [viewAuth, setViewAuth] = useState('login');
+      const [usuarioLogado, setUsuarioLogado] = useState(null);
+      const [loginEmail, setLoginEmail] = useState('');
+      const [loginSenha, setLoginSenha] = useState('');
+      const [erroAuth, setErroAuth] = useState('');
+      const [sucessoAuth, setSucessoAuth] = useState('');
+
+      const [novoCadastro, setNovoCadastro] = useState({ nome: '', email: '', registro: '', validadeIrata: '', senha: '' });
+
+      const [usuariosCadastrados, setUsuariosCadastrados] = useState([
+        { id: 1, nome: 'Gestor Operacional', email: 'gestor@aasj.com', perfil: 'GESTOR', senha: '123', status: 'APROVADO' },
+        { id: 2, nome: 'Herbert Aquino', email: 'herbert@aasj.com', perfil: 'SUPERVISOR', registro: 'IRATA-38910', validadeIrata: '2026-11-20', senha: '123', status: 'APROVADO' },
+        { id: 3, nome: 'Anselmo de Jesus', email: 'anselmo@aasj.com', perfil: 'SUPERVISOR', registro: 'IRATA-31042', validadeIrata: '2025-05-15', senha: '123', status: 'APROVADO' }
+      ]);
+
+      const [activeTab, setActiveTab] = useState('painel');
+      const [campanha] = useState({ cliente: 'PRIO', unidade: 'POLVO A', dataEmissao: '2026-03-12', periodoEmbarque: '01/03/26 a 15/03/26', liderConstrucao: 'Felipe Moraes' });
+      const [unidades, setUnidades] = useState(UNIDADES_INICIAIS);
+      const [novaUnidade, setNovaUnidade] = useState('');
+      const [erroUnidade, setErroUnidade] = useState('');
+      const unidadePadrao = () => unidades.includes(campanha.unidade) ? campanha.unidade : (unidades[0] || '');
+
+      // Cadastro de novo colaborador (feito pelo N3 direto dos formulários)
+      const novoColabVazio = { nome: '', nivel: 'N1', funcao: '', registro: '', validadeIrata: '' };
+      const [modalColab, setModalColab] = useState(null); // { permitirN3, onCriado }
+      const [novoColab, setNovoColab] = useState(novoColabVazio);
+      const [erroColab, setErroColab] = useState('');
+
+      const [colaboradores, setColaboradores] = useState([
+        { id: 1, nome: 'Anselmo de Jesus', nivel: 'N3', funcao: 'Supervisor IRATA N3', registro: 'IRATA-31042', statusCert: 'Regular' },
+        { id: 2, nome: 'Herbert Aquino', nivel: 'N3', funcao: 'Supervisor IRATA N3', registro: 'IRATA-38910', statusCert: 'Regular' },
+        { id: 3, nome: 'Igor das Neves', nivel: 'N2', funcao: 'Pintor Escadista', registro: 'IRATA-42109', statusCert: 'Regular' },
+        { id: 4, nome: 'Jhonny Alves', nivel: 'N1', funcao: 'Pintor Escadista', registro: 'IRATA-48190', statusCert: 'Regular' },
+      ]);
+      const supervisoresN3List = usuariosCadastrados.filter(u => u.perfil === 'SUPERVISOR' && u.status === 'APROVADO');
+
+      const [equipamentos, setEquipamentos] = useState([
+        { id: 1, equipamento: 'Croll', fabricante: 'Petzl', tag: 'AASJ-EQU-101', kit: '10', status: 'Operacional' },
+        { id: 2, equipamento: 'Ascender Basic', fabricante: 'Petzl', tag: 'AASJ-EQU-102', kit: '10', status: 'Operacional' }
+      ]);
+      const [showModalInv, setShowModalInv] = useState(false);
+      const [novoEquipamento, setNovoEquipamento] = useState({ equipamento: '', fabricante: '', tag: '', kit: '', status: 'Operacional' });
+
+      const [entregas, setEntregas] = useState([{ id: 1, supervisorN3: 'Herbert Aquino', kit: '10', usuario: 'Igor das Neves', condRetirada: 'BOM', dataRetirada: '2026-03-01' }]);
+      const [showModalFO48, setShowModalFO48] = useState(false);
+      const [novaEntrega, setNovaEntrega] = useState({ kit: '', usuario: '', condRetirada: 'BOM', dataRetirada: campanha.dataEmissao });
+
+      const [checklistsKits, setChecklistsKits] = useState([
+        { id: 1, supervisorN3: 'Herbert Aquino', data: '2026-03-02', escalador: 'Igor das Neves', kit: '10', atividade: 'Pintura de Paiol', ptNum: 'PT-89412', aprNum: 'APR-04', rescatista: 'Herbert Aquino', itens: checklistCompleto(), observacoes: '', unidade: 'POLVO A' },
+        { id: 2, supervisorN3: 'Anselmo de Jesus', data: '2026-03-03', escalador: 'Jhonny Alves', kit: '12', atividade: 'Tratamento de corrosão no costado', ptNum: 'PT-89455', aprNum: 'APR-07', rescatista: 'Anselmo de Jesus', itens: { ...checklistCompleto(), clima: false }, observacoes: 'Vento acima do limite pela manhã; atividade iniciada às 10h.', unidade: 'BRAVO' },
+        { id: 3, supervisorN3: 'Herbert Aquino', data: '2026-03-05', escalador: 'Igor das Neves', kit: '10', atividade: 'Inspeção de guarda-corpo', ptNum: 'PT-90112', aprNum: 'APR-09', rescatista: 'Herbert Aquino', itens: checklistCompleto(), observacoes: '', unidade: 'P-50' }
+      ]);
+      const [showModalCL01, setShowModalCL01] = useState(false);
+      const novoCL01Vazio = () => ({ escalador: '', kit: '', data: campanha.dataEmissao, atividade: '', ptNum: '', aprNum: '', rescatista: '', itens: checklistCompleto(), observacoes: '', unidade: unidadePadrao() });
+      const [novoCL01, setNovoCL01] = useState(novoCL01Vazio);
+      const [editCL01Id, setEditCL01Id] = useState(null);
+
+      const [logbooks, setLogbooks] = useState([
+        { id: 1, supervisorN3: 'Herbert Aquino', unidade: 'POLVO A', embarqueInicio: '2026-03-01', embarqueFim: '2026-03-15', colaborador: 'Igor das Neves', nivel: 'N2', funcao: 'Pintor Escadista', horas: { '2026-03-01': 8, '2026-03-02': 8, '2026-03-03': 8 }, horasSem: { '2026-03-01': 2, '2026-03-02': 3, '2026-03-03': 2 } },
+        { id: 2, supervisorN3: 'Anselmo de Jesus', unidade: 'BRAVO', embarqueInicio: '2026-03-01', embarqueFim: '2026-03-14', colaborador: 'Jhonny Alves', nivel: 'N1', funcao: 'Pintor Escadista', horas: { '2026-03-01': 7.5, '2026-03-02': 7.5, '2026-03-03': 4, '2026-03-04': 7.5, '2026-03-05': 7.5 }, horasSem: { '2026-03-03': 6 } }
+      ]);
+      const [showModalFO45, setShowModalFO45] = useState(false);
+      const [pessoaSelecionadaFO45, setPessoaSelecionadaFO45] = useState('');
+      const [unidadeFO45, setUnidadeFO45] = useState(campanha.unidade);
+      // Período de embarque do colaborador (padrão: período da campanha, 01/03/26 a 15/03/26)
+      const embarquePadrao = { inicio: '2026-03-01', fim: '2026-03-15' };
+      const [embarqueFO45, setEmbarqueFO45] = useState(embarquePadrao);
+      const [erroFO45, setErroFO45] = useState('');
+      const [editFO45Id, setEditFO45Id] = useState(null);
+
+      const [danosReports, setDanosReports] = useState([]);
+
+      // Notificações internas (para: 'GESTOR' ou o nome do supervisor)
+      const [notificacoes, setNotificacoes] = useState([]);
+      const [notifAberto, setNotifAberto] = useState(false);
+      const [ajudaTeclado, setAjudaTeclado] = useState(false);
+
+      // Atalhos globais de teclado. O ref guarda o estado atual (seções, janelas abertas) atualizado a cada render.
+      const atalhosRef = useRef({});
+      useEffect(() => {
+        const onKey = (e) => {
+          const a = atalhosRef.current;
+          if (e.key === 'Escape') {
+            // Fecha o que estiver por cima, um de cada vez
+            const camadas = a.camadas || [];
+            const aberta = camadas.find(([aberto]) => aberto);
+            if (aberta) { e.preventDefault(); aberta[1](); }
+            return;
+          }
+          if (!a.logado) return;
+          // Alt + 1..9: ir para a seção do menu
+          if (e.altKey && !e.ctrlKey && !e.metaKey && /^[1-9]$/.test(e.key)) {
+            const s = a.secoes?.[Number(e.key) - 1];
+            if (s) { e.preventDefault(); a.irPara(s.tabs[0]); setTimeout(() => document.querySelector('[data-nav-ativo="true"]')?.focus(), 50); }
+            return;
+          }
+          if (digitando(document.activeElement) || e.ctrlKey || e.metaKey || e.altKey) return;
+          if (e.key === '?') { e.preventDefault(); setAjudaTeclado(v => !v); }
+          else if (e.key === '/') { e.preventDefault(); document.getElementById('busca-global')?.focus(); }
+          else if (e.key.toLowerCase() === 'n') { e.preventDefault(); a.alternarNotif?.(); }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+      }, []);
+      const [showModalRL32, setShowModalRL32] = useState(false);
+      const novoDanoVazio = { equipamentoTag: '', falha: '', acao: 'substituir', urgencia: 'urgente', foto: '' };
+      const [novoDano, setNovoDano] = useState(novoDanoVazio);
+      const [decisao, setDecisao] = useState(null); // janela de decisão do gestor
+      const [erroDecisao, setErroDecisao] = useState('');
+      const [fotoAmpliada, setFotoAmpliada] = useState('');
+      const [historicoAberto, setHistoricoAberto] = useState({});
+
+      const [avaliacoes, setAvaliacoes] = useState([
+        { id: 1, supervisorN3: 'Herbert Aquino', colaborador: 'Igor das Neves', funcao: 'Pintor Escadista', data: '2026-03-10', notas: [9,10,9,9,10,9,9,10,9,9], soma: 93, anotacoes: 'Excelente desempenho nas fainas.', unidade: 'POLVO A' },
+        { id: 2, supervisorN3: 'Anselmo de Jesus', colaborador: 'Jhonny Alves', funcao: 'Pintor Escadista', data: '2026-03-11', notas: [8,7,6,8,9,7,8,6,7,8], soma: 74, anotacoes: 'Bom comportamento; reforçar técnica de transferência e organização do posto.', unidade: 'BRAVO' }
+      ]);
+      const [showModalFO41, setShowModalFO41] = useState(false);
+      const novaAvaliacaoVazia = () => ({ colaborador: '', data: campanha.dataEmissao, notas: [9,9,9,9,9,9,9,9,9,9], anotacoes: '', unidade: unidadePadrao() });
+      const [novaAvaliacao, setNovaAvaliacao] = useState(novaAvaliacaoVazia);
+      const [editFO41Id, setEditFO41Id] = useState(null);
+
+      const [filtroDashboardSupervisor, setFiltroDashboardSupervisor] = useState('');
+      const [filtroUnidade, setFiltroUnidade] = useState('');
+
+      useEffect(() => {
+        if (darkMode) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+      }, [darkMode]);
+
+      const handleLogin = (e) => {
+        e.preventDefault();
+        setErroAuth('');
+        const user = usuariosCadastrados.find(u => u.email === loginEmail && u.senha === loginSenha);
+        if (!user) { setErroAuth('E-mail ou senha incorretos.'); return; }
+        if (user.status !== 'APROVADO') { setErroAuth('Sua conta aguarda liberação do Gestor.'); return; }
+        setUsuarioLogado(user);
+        setActiveTab(user.perfil === 'GESTOR' ? 'painel' : 'fo45');
+      };
+
+      const handleSolicitarCadastro = (e) => {
+        e.preventDefault();
+        if (usuariosCadastrados.some(u => u.email === novoCadastro.email)) {
+          setErroAuth('E-mail já cadastrado.'); return;
+        }
+        const novoUser = { id: Date.now(), ...novoCadastro, perfil: 'SUPERVISOR', status: 'PENDENTE' };
+        setUsuariosCadastrados([...usuariosCadastrados, novoUser]);
+        setSucessoAuth('Solicitação enviada com sucesso! Aguarde aprovação.');
+        setNovoCadastro({ nome: '', email: '', registro: '', validadeIrata: '', senha: '' });
+        setTimeout(() => setViewAuth('login'), 3000);
+      };
+
+      const aprovarUsuario = (id) => setUsuariosCadastrados(usuariosCadastrados.map(u => u.id === id ? {...u, status: 'APROVADO'} : u));
+      const rejeitarUsuario = (id) => setUsuariosCadastrados(usuariosCadastrados.filter(u => u.id !== id));
+
+      /* Unidades: cadastro e remoção pelo gestor */
+      const docsDaUnidade = (u) => [...logbooks, ...checklistsKits, ...avaliacoes].filter(d => d.unidade === u).length;
+      const adicionarUnidade = (e) => {
+        e.preventDefault();
+        const nome = novaUnidade.trim().toUpperCase().replace(/\s+/g, ' ');
+        if (!nome) return;
+        if (unidades.includes(nome)) { setErroUnidade(`A unidade ${nome} já está cadastrada.`); return; }
+        setUnidades([...unidades, nome]); setNovaUnidade(''); setErroUnidade('');
+      };
+      const removerUnidade = (u) => {
+        if (docsDaUnidade(u) > 0) return;
+        if (!confirmar(`Remover a unidade ${u}?`)) return;
+        setUnidades(unidades.filter(x => x !== u));
+        if (filtroUnidade === u) setFiltroUnidade('');
+      };
+
+      // Lança horas numa data; só aceita datas dentro do período de embarque do colaborador
+      // tipo: 'horas' (com acesso) ou 'horasSem' (sem acesso). Acesso ≤ 8h; acesso + sem acesso ≤ 12h no dia
+      const handleUpdateHoraLogbook = (logbookId, iso, valor, tipo = 'horas') => {
+        const valNum = valor === '' ? 0 : parseFloat(valor);
+        if (isNaN(valNum) || valNum < 0) return;
+        const lb = logbooks.find(x => x.id === logbookId);
+        if (!lb || !dentroPeriodo(lb, iso)) return;
+        if (tipo === 'horas' && valNum > LIMITE_HORAS_DIA) { alert(`Atenção: o limite máximo diário em acesso por cordas é ${LIMITE_HORAS_DIA}h.`); return; }
+        const outro = ((tipo === 'horas' ? lb.horasSem : lb.horas) || {})[iso] || 0;
+        if (valNum + outro > LIMITE_TOTAL_DIA) { alert(`Atenção: a soma de horas com acesso e sem acesso no mesmo dia não pode passar de ${LIMITE_TOTAL_DIA}h (já há ${outro}h ${tipo === 'horas' ? 'sem acesso' : 'com acesso'} em ${fmtData(iso)}).`); return; }
+        setLogbooks(prev => prev.map(x => {
+          if (x.id !== logbookId) return x;
+          const mapa = { ...(x[tipo] || {}) };
+          if (valNum > 0) mapa[iso] = valNum; else delete mapa[iso];
+          return { ...x, [tipo]: mapa };
+        }));
+      };
+
+      const submitInv = (e) => { e.preventDefault(); setEquipamentos([...equipamentos, { id: Date.now(), ...novoEquipamento }]); setShowModalInv(false); setNovoEquipamento({equipamento:'', fabricante:'', tag:'', kit:'', status:'Operacional'}); };
+      const submitFO48 = (e) => { e.preventDefault(); setEntregas([...entregas, { id: Date.now(), supervisorN3: usuarioLogado.nome, ...novaEntrega }]); setShowModalFO48(false); };
+      /* CL-01: criar, editar e excluir */
+      const abrirNovoCL01 = () => { setEditCL01Id(null); setNovoCL01(novoCL01Vazio()); setShowModalCL01(true); };
+      const abrirEditarCL01 = (c) => { setEditCL01Id(c.id); setNovoCL01({ ...novoCL01Vazio(), ...c, itens: { ...checklistCompleto(), ...(c.itens || {}) } }); setShowModalCL01(true); };
+      const submitCL01 = (e) => {
+        e.preventDefault();
+        if (editCL01Id) setChecklistsKits(checklistsKits.map(c => c.id === editCL01Id ? { ...c, ...novoCL01 } : c));
+        else setChecklistsKits([...checklistsKits, { id: Date.now(), supervisorN3: usuarioLogado.nome, ...novoCL01 }]);
+        setShowModalCL01(false); setEditCL01Id(null);
+      };
+      const excluirCL01 = (c) => { if (confirmar(`Excluir o checklist ${c.ptNum} de ${c.data}?`)) setChecklistsKits(checklistsKits.filter(x => x.id !== c.id)); };
+
+      /* FO-45: vincular/trocar colaborador e excluir linha */
+      const abrirNovoFO45 = () => { setEditFO45Id(null); setPessoaSelecionadaFO45(''); setUnidadeFO45(unidadePadrao()); setEmbarqueFO45(embarquePadrao); setErroFO45(''); setShowModalFO45(true); };
+      const abrirEditarFO45 = (lb) => { setEditFO45Id(lb.id); setPessoaSelecionadaFO45(lb.colaborador); setUnidadeFO45(lb.unidade || unidadePadrao()); setEmbarqueFO45({ inicio: lb.embarqueInicio || '', fim: lb.embarqueFim || '' }); setErroFO45(''); setShowModalFO45(true); };
+      const submitFO45Pessoa = (e) => {
+        e.preventDefault();
+        const colab = colaboradores.find(c => c.nome === pessoaSelecionadaFO45);
+        if (!colab) return;
+        if (embarqueFO45.fim < embarqueFO45.inicio) { setErroFO45('A data de desembarque não pode ser antes do embarque.'); return; }
+        if (diasPeriodo(embarqueFO45.inicio, embarqueFO45.fim) > 120) { setErroFO45('O período de embarque não pode passar de 120 dias.'); return; }
+        const periodo = { embarqueInicio: embarqueFO45.inicio, embarqueFim: embarqueFO45.fim };
+        if (editFO45Id) {
+          // Se o período encolheu, as horas lançadas fora dele são descartadas (com confirmação)
+          const atual = logbooks.find(lb => lb.id === editFO45Id);
+          const fora = [...Object.entries(atual.horas || {}), ...Object.entries(atual.horasSem || {})].filter(([iso]) => iso < periodo.embarqueInicio || iso > periodo.embarqueFim);
+          if (fora.length && !confirmar(`${fora.reduce((a, [, v]) => a + v, 0)}h lançadas em ${fora.length} dia(s) ficam fora do novo período e serão removidas. Continuar?`)) return;
+          const recorta = (mapa) => Object.fromEntries(Object.entries(mapa || {}).filter(([iso]) => iso >= periodo.embarqueInicio && iso <= periodo.embarqueFim));
+          const horas = recorta(atual.horas), horasSem = recorta(atual.horasSem);
+          setLogbooks(logbooks.map(lb => lb.id === editFO45Id ? { ...lb, ...periodo, horas, horasSem, unidade: unidadeFO45, colaborador: colab.nome, nivel: colab.nivel, funcao: colab.funcao } : lb));
+        }
+        else setLogbooks([...logbooks, { id: Date.now(), supervisorN3: usuarioLogado.nome, ...periodo, unidade: unidadeFO45, colaborador: colab.nome, nivel: colab.nivel, funcao: colab.funcao, horas: {}, horasSem: {} }]);
+        setShowModalFO45(false); setEditFO45Id(null);
+      };
+      const zerarFO45 = (lb) => { if (confirmar(`Zerar todas as horas de ${lb.colaborador}?`)) setLogbooks(logbooks.map(x => x.id === lb.id ? { ...x, horas: {}, horasSem: {} } : x)); };
+      const excluirFO45 = (lb) => { if (confirmar(`Remover ${lb.colaborador} do logbook? As horas lançadas serão perdidas.`)) setLogbooks(logbooks.filter(x => x.id !== lb.id)); };
+
+      const notificar = (para, dados) => setNotificacoes(prev => [{ id: Date.now() + Math.random(), para, data: new Date().toISOString(), lida: false, ...dados }, ...prev]);
+
+      /* ---------- RL-32: caso de dano com fluxo de troca ----------
+         Etapas: reportado → ciente → troca_aprovada → enviado → encerrado (Substituído)
+                 ou ciente → inspecao → encerrado (Liberado / Condenado), ou encerrado (Recusado / Condenado) */
+      const agoraISO = () => new Date().toISOString();
+      const atualizarDano = (id, patch, evento, detalhe = '') => setDanosReports(prev => prev.map(d => d.id === id
+        ? { ...d, ...patch, historico: [...(d.historico || []), { quando: agoraISO(), quem: usuarioLogado.nome, evento, detalhe }] }
+        : d));
+      const setStatusEquip = (tag, status) => setEquipamentos(prev => prev.map(eq => eq.tag === tag ? { ...eq, status } : eq));
+      const marcarNotifsDanoLidas = (danoId, para) => setNotificacoes(prev => prev.map(n => n.para === para && n.danoId === danoId ? { ...n, lida: true } : n));
+
+      // Reduz a foto para não pesar na memória do navegador
+      const lerFotoReduzida = (file) => new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            const max = 1024, esc = Math.min(1, max / Math.max(img.width, img.height));
+            const c = document.createElement('canvas'); c.width = img.width * esc; c.height = img.height * esc;
+            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+            resolve(c.toDataURL('image/jpeg', 0.8));
+          };
+          img.onerror = () => resolve('');
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      const submitRL32 = (e) => {
+        e.preventDefault();
+        const danoId = Date.now();
+        const eq = equipamentos.find(x => x.tag === novoDano.equipamentoTag);
+        setDanosReports([...danosReports, {
+          id: danoId, supervisorN3: usuarioLogado.nome, data: campanha.dataEmissao, status: 'Em Quarentena', reportadoEm: agoraISO(),
+          ciente: false, etapa: 'reportado', equipamento: eq?.equipamento, fabricante: eq?.fabricante, kit: eq?.kit, ...novoDano,
+          historico: [{ quando: agoraISO(), quem: usuarioLogado.nome, evento: 'Dano reportado', detalhe: `${ACOES_DANO[novoDano.acao]} · ${URGENCIAS[novoDano.urgencia][0]}` }],
+        }]);
+        setStatusEquip(novoDano.equipamentoTag, 'QUARENTENA');
+        notificar('GESTOR', { tipo: 'dano', danoId, titulo: `${novoDano.urgencia === 'parada' ? '🚨 ' : ''}Dano reportado · ${novoDano.equipamentoTag}`, texto: `${usuarioLogado.nome} pede ${ACOES_DANO[novoDano.acao].toLowerCase()} (${URGENCIAS[novoDano.urgencia][0].toLowerCase()})${eq ? ` de ${eq.equipamento}` : ''}: “${novoDano.falha}”.` });
+        setShowModalRL32(false);
+        setNovoDano(novoDanoVazio);
+      };
+
+      // Gestor: confirma recebimento do reporte
+      const confirmarCiencia = (danoId) => {
+        const dano = danosReports.find(d => d.id === danoId);
+        if (!dano || dano.ciente) return;
+        atualizarDano(danoId, { ciente: true, cienteEm: agoraISO(), cientePor: usuarioLogado.nome, etapa: dano.etapa === 'reportado' || !dano.etapa ? 'ciente' : dano.etapa }, 'Gestor ciente');
+        marcarNotifsDanoLidas(danoId, 'GESTOR');
+        notificar(dano.supervisorN3, { tipo: 'ciente', danoId, titulo: `Gestor ciente · ${dano.equipamentoTag}`, texto: `${usuarioLogado.nome} confirmou o recebimento do seu relatório de dano.` });
+      };
+
+      // Gestor: abre a janela de decisão
+      const abrirDecisao = (d, tipo) => {
+        setErroDecisao('');
+        setDecisao({ danoId: d.id, tipo: tipo || (d.acao === 'inspecao' && d.etapa !== 'inspecao' ? 'inspecao' : 'troca'), equipamento: d.equipamento || '', fabricante: d.fabricante || '', tag: '', previsao: '', obs: '' });
+      };
+      const salvarDecisao = (e) => {
+        e.preventDefault();
+        const d = danosReports.find(x => x.id === decisao.danoId);
+        if (!d) return;
+        const base = { ciente: true, cienteEm: d.cienteEm || agoraISO(), cientePor: d.cientePor || usuarioLogado.nome };
+        const avisar = (titulo, texto, tipo = 'info') => notificar(d.supervisorN3, { tipo, danoId: d.id, titulo: `${titulo} · ${d.equipamentoTag}`, texto });
+        if (decisao.tipo === 'troca') {
+          const tag = decisao.tag.trim().toUpperCase();
+          if (!tag) { setErroDecisao('Informe a TAG do equipamento substituto.'); return; }
+          if (equipamentos.some(eq => eq.tag.toUpperCase() === tag)) { setErroDecisao(`A TAG ${tag} já existe no inventário.`); return; }
+          const substituto = { equipamento: decisao.equipamento.trim() || d.equipamento, fabricante: decisao.fabricante.trim() || d.fabricante, tag, previsao: decisao.previsao };
+          atualizarDano(d.id, { ...base, etapa: 'troca_aprovada', substituto, obsGestor: decisao.obs }, 'Troca aprovada', `Substituto ${tag}${decisao.previsao ? ` · previsão ${decisao.previsao}` : ''}${decisao.obs ? ` · ${decisao.obs}` : ''}`);
+          avisar('Troca aprovada', `${usuarioLogado.nome} aprovou a troca. Substituto: ${substituto.equipamento} ${tag}${decisao.previsao ? `, previsão ${decisao.previsao}` : ''}.`);
+        } else if (decisao.tipo === 'inspecao') {
+          atualizarDano(d.id, { ...base, etapa: 'inspecao', obsGestor: decisao.obs }, 'Enviado para inspeção', decisao.obs);
+          avisar('Em inspeção', `${usuarioLogado.nome} enviou o equipamento para inspeção/manutenção. Ele segue em quarentena.`);
+        } else if (decisao.tipo === 'condenar') {
+          setStatusEquip(d.equipamentoTag, 'CONDENADO');
+          atualizarDano(d.id, { ...base, etapa: 'encerrado', resultado: 'Condenado', status: 'Condenado', obsGestor: decisao.obs, encerradoEm: agoraISO() }, 'Equipamento condenado', decisao.obs);
+          avisar('Equipamento condenado', `${usuarioLogado.nome} condenou o equipamento (sem reposição).${decisao.obs ? ` ${decisao.obs}` : ''}`);
+        } else if (decisao.tipo === 'recusar') {
+          if (!decisao.obs.trim()) { setErroDecisao('Escreva a justificativa da recusa.'); return; }
+          setStatusEquip(d.equipamentoTag, 'Operacional');
+          atualizarDano(d.id, { ...base, etapa: 'encerrado', resultado: 'Recusado', status: 'Liberado', obsGestor: decisao.obs, encerradoEm: agoraISO() }, 'Troca recusada', decisao.obs);
+          avisar('Troca recusada', `${usuarioLogado.nome} recusou a troca e liberou o equipamento: ${decisao.obs}`, 'dano');
+        }
+        marcarNotifsDanoLidas(d.id, 'GESTOR');
+        setDecisao(null);
+      };
+
+      // Gestor: substituto despachado
+      const marcarEnviado = (d) => {
+        atualizarDano(d.id, { etapa: 'enviado', enviadoEm: agoraISO() }, 'Substituto enviado', d.substituto?.previsao ? `Previsão ${d.substituto.previsao}` : '');
+        notificar(d.supervisorN3, { tipo: 'info', danoId: d.id, titulo: `Substituto enviado · ${d.equipamentoTag}`, texto: `${d.substituto?.equipamento} ${d.substituto?.tag} foi enviado. Confirme o recebimento quando chegar.` });
+      };
+
+      // Gestor: resultado da inspeção aprovado → volta a operar
+      const liberarAposInspecao = (d) => {
+        setStatusEquip(d.equipamentoTag, 'Operacional');
+        atualizarDano(d.id, { etapa: 'encerrado', resultado: 'Liberado após inspeção', status: 'Liberado', encerradoEm: agoraISO() }, 'Aprovado na inspeção', 'Equipamento liberado para uso');
+        notificar(d.supervisorN3, { tipo: 'ciente', danoId: d.id, titulo: `Liberado após inspeção · ${d.equipamentoTag}`, texto: `${usuarioLogado.nome} aprovou o equipamento na inspeção. Ele voltou ao inventário operacional.` });
+      };
+
+      // Supervisor: confirma que recebeu o substituto → inventário é atualizado e o caso é encerrado
+      const confirmarRecebimento = (d) => {
+        const s = d.substituto;
+        setEquipamentos(prev => [...prev.map(eq => eq.tag === d.equipamentoTag ? { ...eq, status: 'CONDENADO' } : eq),
+          { id: Date.now(), equipamento: s.equipamento, fabricante: s.fabricante, tag: s.tag, kit: d.kit || '', status: 'Operacional' }]);
+        atualizarDano(d.id, { etapa: 'encerrado', resultado: 'Substituído', status: 'Substituído', recebidoEm: agoraISO(), encerradoEm: agoraISO() }, 'Substituto recebido', `${s.tag} incluído no kit ${d.kit || '—'}; ${d.equipamentoTag} baixado como condenado`);
+        marcarNotifsDanoLidas(d.id, usuarioLogado.nome);
+        notificar('GESTOR', { tipo: 'ciente', danoId: d.id, titulo: `Troca concluída · ${d.equipamentoTag}`, texto: `${usuarioLogado.nome} confirmou o recebimento de ${s.equipamento} ${s.tag}. Caso encerrado.` });
+      };
+
+      const liberarQuarentena = (tag) => {
+        setStatusEquip(tag, 'Operacional');
+        danosReports.filter(d => d.equipamentoTag === tag && d.etapa !== 'encerrado').forEach(d =>
+          atualizarDano(d.id, { etapa: 'encerrado', resultado: 'Liberado (quarentena)', status: 'Liberado', ciente: true, encerradoEm: agoraISO() }, 'Liberado da quarentena pelo gestor'));
+      };
+
+      /* FO-41: criar, editar e excluir */
+      const abrirNovoFO41 = () => { setEditFO41Id(null); setNovaAvaliacao(novaAvaliacaoVazia()); setShowModalFO41(true); };
+      const abrirEditarFO41 = (av) => { setEditFO41Id(av.id); setNovaAvaliacao({ ...novaAvaliacaoVazia(), ...av, notas: av.notas ? [...av.notas] : novaAvaliacaoVazia().notas }); setShowModalFO41(true); };
+      const submitFO41 = (e) => {
+        e.preventDefault();
+        const colab = colaboradores.find(c => c.nome === novaAvaliacao.colaborador);
+        const notas = novaAvaliacao.notas.map(n => Math.max(0, Math.min(10, Number(n) || 0)));
+        const soma = somaNotas(notas);
+        if (editFO41Id) setAvaliacoes(avaliacoes.map(av => av.id === editFO41Id ? { ...av, ...novaAvaliacao, notas, colaborador: colab.nome, funcao: colab.funcao, soma } : av));
+        else setAvaliacoes([...avaliacoes, { id: Date.now(), supervisorN3: usuarioLogado.nome, ...novaAvaliacao, notas, colaborador: colab.nome, funcao: colab.funcao, soma }]);
+        setShowModalFO41(false); setEditFO41Id(null);
+      };
+      const excluirFO41 = (av) => { if (confirmar(`Excluir a avaliação de ${av.colaborador}?`)) setAvaliacoes(avaliacoes.filter(x => x.id !== av.id)); };
+      const setNota = (i, v) => { const notas = [...novaAvaliacao.notas]; notas[i] = v; setNovaAvaliacao({ ...novaAvaliacao, notas }); };
+
+      const filtrarItemOperacional = (item) => usuarioLogado?.perfil === 'GESTOR'
+        ? (!filtroDashboardSupervisor || item.supervisorN3 === filtroDashboardSupervisor) && (!filtroUnidade || !('unidade' in item) || item.unidade === filtroUnidade)
+        : item.supervisorN3 === usuarioLogado?.nome;
+
+      atalhosRef.current = { logado: false, camadas: [] };
+
+      /* ---------- TELA DE LOGIN / CADASTRO ---------- */
+      if (!usuarioLogado) {
+        const trocarView = (v) => { setViewAuth(v); setErroAuth(''); setSucessoAuth(''); };
+        return (
+          <div className="min-h-screen grid lg:grid-cols-2 bg-white dark:bg-slate-950">
+            {/* Painel da marca */}
+            <div className="relative hidden lg:flex flex-col justify-between p-12 overflow-hidden bg-gradient-to-br from-brand-700 via-brand-800 to-brand-950 text-white">
+              <div className="absolute inset-0 bg-grid [mask-image:radial-gradient(ellipse_at_top_left,black,transparent_70%)]"></div>
+              <img src="assets/emblema.jpg" alt="" aria-hidden="true" className="absolute -bottom-24 -right-24 w-[26rem] h-[26rem] rounded-full object-cover opacity-30 ring-1 ring-white/10" />
+
+              <div className="relative flex items-center gap-4">
+                <img src="assets/emblema.jpg" alt="Emblema TechOcean | AASJ" className="w-14 h-14 rounded-full object-cover ring-2 ring-white/20 shadow-xl shadow-black/30" />
+                <div>
+                  <p className="font-display font-bold tracking-wide">TECH<span className="text-brand-300">OCEAN</span> <span className="text-red-500">|</span> AASJ</p>
+                  <p className="text-xs tracking-[0.2em] uppercase text-brand-100/70">Serviços Industriais</p>
+                </div>
+              </div>
+
+              <div className="relative max-w-md">
+                <h2 className="text-4xl font-bold tracking-tight leading-tight">Acesso por cordas com segurança e conformidade.</h2>
+                <div className="mt-5 h-1 w-16 rounded-full bg-red-600"></div>
+                <p className="mt-4 text-brand-50/70 text-sm leading-relaxed">Logbooks, checklists de PT, custódia de EPIs e quarentena de equipamentos em um só lugar, para operações offshore.</p>
+                <ul className="mt-8 space-y-3 text-sm">
+                  {[['clock','Logbook de horas em corda (FO-45)'],['clipboard-check','Checklist diário e PTs (CL-01)'],['shield-alert','Danos e quarentena automática (RL-32)']].map(([ic, txt]) => (
+                    <li key={ic} className="flex items-center gap-3 text-brand-50/90">
+                      <span className="p-1.5 rounded-lg bg-white/10 ring-1 ring-white/15"><Icon name={ic} className="w-4 h-4" /></span>{txt}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <p className="relative text-xs text-brand-100/50">Plataforma Offshore de Acesso por Cordas • IRATA & PRIO</p>
+            </div>
+
+            {/* Formulário */}
+            <div className="flex items-center justify-center p-6 sm:p-10 bg-white dark:bg-slate-950">
+              <div className="w-full max-w-sm anim-pop">
+                <div className="mb-8 inline-flex rounded-xl dark:bg-white dark:px-3 dark:py-2">
+                  <img src="assets/logo-horizontal.png" alt="TechOcean | AASJ Serviços Industriais" className="h-14 w-auto" />
+                </div>
+
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                  {viewAuth === 'login' ? 'Entrar na plataforma' : 'Solicitar cadastro'}
+                </h1>
+                <p className="text-sm text-slate-500 mt-1.5 mb-7">
+                  {viewAuth === 'login' ? 'Use seu e-mail profissional para continuar.' : 'Cadastro de Supervisor N3, sujeito à aprovação do Gestor.'}
+                </p>
+
+                {erroAuth && <div className="mb-5 flex items-start gap-2 p-3 bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-200 dark:ring-red-500/20 text-red-700 dark:text-red-300 text-sm rounded-xl anim-fade"><Icon name="alert-circle" className="w-4 h-4 mt-0.5" />{erroAuth}</div>}
+                {sucessoAuth && <div className="mb-5 flex items-start gap-2 p-3 bg-brand-50 dark:bg-brand-500/10 ring-1 ring-inset ring-brand-200 dark:ring-brand-500/20 text-brand-700 dark:text-brand-300 text-sm rounded-xl anim-fade"><Icon name="check-circle-2" className="w-4 h-4 mt-0.5" />{sucessoAuth}</div>}
+
+                {viewAuth === 'login' ? (
+                  <form onSubmit={handleLogin} className="space-y-4">
+                    <Field label="E-mail profissional">
+                      <input required type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="ex: gestor@aasj.com" className={inputCls} />
+                    </Field>
+                    <Field label="Senha">
+                      <input required type="password" value={loginSenha} onChange={e => setLoginSenha(e.target.value)} placeholder="••••••••" className={inputCls} />
+                    </Field>
+                    <Btn type="submit" size="lg" className="w-full !mt-6" icon="log-in">Acessar sistema</Btn>
+                    <p className="text-center text-sm text-slate-500 pt-4">
+                      É Supervisor N3?{' '}
+                      <button type="button" onClick={() => trocarView('cadastro')} className="font-semibold text-brand-600 hover:text-brand-700 hover:underline underline-offset-4">Solicitar cadastro</button>
+                    </p>
+                  </form>
+                ) : (
+                  <form onSubmit={handleSolicitarCadastro} className="space-y-3.5">
+                    <Field label="Nome completo"><input required type="text" value={novoCadastro.nome} onChange={e=>setNovoCadastro({...novoCadastro, nome: e.target.value})} className={inputCls} placeholder="Ex: Carlos Silva"/></Field>
+                    <Field label="E-mail corporativo"><input required type="email" value={novoCadastro.email} onChange={e=>setNovoCadastro({...novoCadastro, email: e.target.value})} className={inputCls} placeholder="carlos@email.com"/></Field>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Registro IRATA (N3)"><input required type="text" value={novoCadastro.registro} onChange={e=>setNovoCadastro({...novoCadastro, registro: e.target.value})} className={inputCls + " font-mono"} placeholder="IRATA-XXXXX"/></Field>
+                      <Field label="Validade IRATA"><input required type="date" value={novoCadastro.validadeIrata} onChange={e=>setNovoCadastro({...novoCadastro, validadeIrata: e.target.value})} className={inputCls}/></Field>
+                    </div>
+                    <Field label="Senha de acesso"><input required type="password" value={novoCadastro.senha} onChange={e=>setNovoCadastro({...novoCadastro, senha: e.target.value})} className={inputCls} placeholder="••••••••"/></Field>
+                    <Btn type="submit" size="lg" className="w-full !mt-6" icon="send">Enviar solicitação</Btn>
+                    <button type="button" onClick={() => trocarView('login')} className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 pt-3">
+                      <Icon name="arrow-left" className="w-4 h-4" /> Voltar ao login
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      /* ---------- APLICAÇÃO LOGADA ---------- */
+      const isGestor = usuarioLogado.perfil === 'GESTOR';
+      const pendentes = usuariosCadastrados.filter(u => u.status === 'PENDENTE');
+      const emQuarentena = equipamentos.filter(e => e.status === 'QUARENTENA');
+
+      // Navegação enxuta: poucas seções no menu; cada seção alterna seus documentos por uma barra interna
+      const secoes = isGestor ? [
+        { id: 'painel', icon: 'layout-dashboard', label: 'Painel', tabs: ['painel'] },
+        { id: 'documentos', icon: 'folder-open', label: 'Documentos N3', tabs: ['fo45', 'cl01', 'fo41'] },
+        { id: 'equipamentos', icon: 'shield-alert', label: 'Equipamentos', tabs: ['auditoria', 'quarentena'], count: danosReports.filter(d => ['reportado', 'ciente', 'troca_aprovada', 'inspecao'].includes(d.etapa)).length, tone: 'rose' },
+        { id: 'equipe', icon: 'users', label: 'Equipe e unidades', tabs: ['autorizacoes', 'unidades'], count: pendentes.length, tone: 'amber' },
+      ] : [
+        { id: 'documentos', icon: 'folder-open', label: 'Documentos N3', tabs: ['fo45', 'cl01', 'fo41'] },
+        { id: 'equipamentos', icon: 'wrench', label: 'Equipamentos', tabs: ['rl32', 'fo48', 'inv'], count: danosReports.filter(d => d.supervisorN3 === usuarioLogado.nome && d.etapa === 'enviado').length, tone: 'violet' },
+      ];
+      const secaoAtual = secoes.find(s => s.tabs.includes(activeTab)) || secoes[0];
+      const rotulosAbas = {
+        fo45: 'Horas · FO-45', cl01: 'Checklist · CL-01', fo41: 'Avaliação · FO-41',
+        quarentena: 'Quarentenas', auditoria: 'Danos e trocas',
+        autorizacoes: 'Aprovações', unidades: 'Unidades',
+        fo48: 'Custódia EPI', inv: 'Inventário', rl32: 'Danos e trocas',
+      };
+      const danosSemCiencia = danosReports.filter(d => !d.ciente);
+      const casosGestor = danosReports.filter(d => ['reportado', 'ciente', 'troca_aprovada', 'inspecao'].includes(d.etapa));
+      const casosParados = casosGestor.filter(d => d.urgencia === 'parada');
+      const contagemAba = { quarentena: emQuarentena.length, autorizacoes: pendentes.length, auditoria: isGestor ? casosGestor.length : 0, rl32: isGestor ? 0 : danosReports.filter(d => d.supervisorN3 === usuarioLogado.nome && d.etapa === 'enviado').length };
+      const minhasNotificacoes = notificacoes.filter(n => isGestor ? n.para === 'GESTOR' : n.para === usuarioLogado.nome);
+      const naoLidas = minhasNotificacoes.filter(n => !n.lida).length;
+      const fmtDataHora = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+      const marcarLida = (id) => setNotificacoes(prev => prev.map(n => n.id === id ? { ...n, lida: true } : n));
+      const marcarTodasLidas = () => setNotificacoes(prev => prev.map(n => minhasNotificacoes.some(m => m.id === n.id) ? { ...n, lida: true } : n));
+      const abrirNotificacao = (n) => { marcarLida(n.id); setNotifAberto(false); setActiveTab(isGestor ? 'auditoria' : 'rl32'); setMenuAberto(false); };
+
+      const paginas = {
+        'painel': ['Painel', 'Horas, checklists e avaliações dos Supervisores N3, por unidade e por supervisor.'],
+        'autorizacoes': ['Aprovações', 'Aprove ou rejeite solicitações de cadastro de Supervisores N3.'],
+        'unidades': ['Unidades', 'Plataformas disponíveis para os supervisores indicarem nos documentos.'],
+        'quarentena': ['Quarentenas', 'Equipamentos isolados aguardando liberação.'],
+        'auditoria': ['Danos e trocas', 'Casos de dano (RL-32): ciência, decisão, envio do substituto e recebimento. Entregas de EPI (FO-48) ao lado.'],
+        'fo45': ['Logbook de Horas em Corda (FO-45)', `Apontamento diário de horas com acesso (corda) e sem acesso. Limites anti-fadiga: ${LIMITE_HORAS_DIA}h com acesso e ${LIMITE_TOTAL_DIA}h no total por dia.`],
+        'cl01': ['Checklist Diário e PTs (CL-01)', 'Checklist diário com verificação de Permissão de Trabalho (PT), APR e Rescatista.'],
+        'fo48': ['Controle de Custódia de EPIs (FO-48)', 'Controle de custódia e retirada de kits de equipamentos.'],
+        'rl32': ['Danos e trocas (RL-32)', 'Ao reportar, o equipamento vai para quarentena e o gestor é notificado. Acompanhe aqui até a troca chegar.'],
+        'fo41': ['Avaliação Comportamental (FO-41)', 'Avaliação comportamental e de desempenho dos escaladores, em 10 critérios.'],
+        'inv': ['Inventário Geral de TAGs', 'Inventário de TAGs e controle de status operacional.'],
+      };
+      const tituloPagina = secaoAtual.label;
+      const descPagina = (paginas[activeTab] || ['', ''])[1];
+
+      const acoes = isGestor ? {} : {
+        fo45: { label: 'Adicionar colaborador', icon: 'user-plus', onClick: abrirNovoFO45 },
+        cl01: { label: 'Novo checklist', icon: 'plus', onClick: abrirNovoCL01 },
+        fo48: { label: 'Registrar retirada', icon: 'plus', onClick: () => setShowModalFO48(true) },
+        rl32: { label: 'Reportar dano', icon: 'alert-triangle', variant: 'danger', onClick: () => setShowModalRL32(true) },
+        fo41: { label: 'Nova avaliação', icon: 'plus', onClick: abrirNovoFO41 },
+        inv: { label: 'Adicionar TAG', icon: 'plus', onClick: () => setShowModalInv(true) },
+      };
+      const acao = acoes[activeTab];
+
+      const irPara = (id) => { setActiveTab(id); setMenuAberto(false); };
+
+      // Estado lido pelos atalhos globais. "camadas" = o que o Esc fecha, do mais alto para o mais baixo.
+      atalhosRef.current = {
+        logado: true, secoes, irPara,
+        alternarNotif: () => setNotifAberto(v => !v),
+        camadas: [
+          [!!fotoAmpliada, () => setFotoAmpliada('')],
+          [ajudaTeclado, () => setAjudaTeclado(false)],
+          [!!modalColab, () => setModalColab(null)],
+          [!!decisao, () => setDecisao(null)],
+          [showModalFO45, () => setShowModalFO45(false)],
+          [showModalCL01, () => setShowModalCL01(false)],
+          [showModalFO41, () => setShowModalFO41(false)],
+          [showModalFO48, () => setShowModalFO48(false)],
+          [showModalRL32, () => setShowModalRL32(false)],
+          [showModalInv, () => setShowModalInv(false)],
+          [notifAberto, () => setNotifAberto(false)],
+          [menuAberto, () => setMenuAberto(false)],
+        ],
+      };
+
+      // Setas ↑/↓ (e Home/End) entre os itens do menu lateral
+      const navegarMenu = (e) => {
+        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+        const itens = [...e.currentTarget.querySelectorAll('button[data-nav]')];
+        const i = itens.indexOf(document.activeElement);
+        const prox = e.key === 'Home' ? 0 : e.key === 'End' ? itens.length - 1 : (i + (e.key === 'ArrowDown' ? 1 : -1) + itens.length) % itens.length;
+        e.preventDefault(); itens[prox]?.focus();
+      };
+
+      // Setas ←/→ entre as abas internas da seção (padrão de "tablist")
+      const navegarAbas = (e) => {
+        if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) return;
+        const abas = secaoAtual.tabs;
+        const i = abas.indexOf(activeTab);
+        const prox = e.key === 'Home' ? 0 : e.key === 'End' ? abas.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + abas.length) % abas.length;
+        e.preventDefault(); setActiveTab(abas[prox]);
+        setTimeout(() => document.querySelector(`[data-aba="${abas[prox]}"]`)?.focus(), 0);
+      };
+
+      // Grade de horas: setas movem entre os campos (pulando dias bloqueados), Enter desce e Shift+Enter sobe
+      const navegarGrade = (e) => {
+        const el = e.target;
+        const mapa = { ArrowRight: [0, 1], ArrowLeft: [0, -1], ArrowDown: [1, 0], ArrowUp: [-1, 0], Enter: [e.shiftKey ? -1 : 1, 0] };
+        const passo = mapa[e.key];
+        if (!passo || el.dataset.linha === undefined) return;
+        e.preventDefault(); // evita que ↑/↓ alterem o número no campo
+        let lin = Number(el.dataset.linha), col = Number(el.dataset.coluna);
+        const maxLin = Number(el.dataset.maxLinha), maxCol = Number(el.dataset.maxColuna);
+        for (let n = 0; n < 200; n++) {
+          lin += passo[0]; col += passo[1];
+          if (lin < 0 || lin > maxLin || col < 0 || col > maxCol) return;
+          const alvo = document.querySelector(`[data-grade="fo45"][data-linha="${lin}"][data-coluna="${col}"]`);
+          if (alvo && !alvo.disabled) { alvo.focus(); alvo.select?.(); alvo.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return; }
+        }
+      };
+
+      // Indicadores dos documentos N3 de um supervisor (ou de todos, quando nome = '')
+      const statsSupervisor = (nome) => {
+        const doSup = (item) => (!nome || item.supervisorN3 === nome) && (!filtroUnidade || item.unidade === filtroUnidade);
+        const lbs = logbooks.filter(doSup), cls = checklistsKits.filter(doSup), avs = avaliacoes.filter(doSup);
+        const datas = datasDosLogbooks(lbs);
+        const horasDia = datas.map(iso => lbs.reduce((a, lb) => a + ((lb.horas || {})[iso] || 0), 0));
+        const horas = horasDia.reduce((a, b) => a + b, 0);
+        const conf = cls.length ? Math.round(cls.reduce((a, c) => a + conformidadeCL(c).pct, 0) / cls.length) : null;
+        const media = avs.length ? Math.round(avs.reduce((a, av) => a + av.soma, 0) / avs.length) : null;
+        const mediaCriterios = CRITERIOS_FO41.map((_, i) => avs.filter(a => a.notas).length ? avs.filter(a => a.notas).reduce((s, a) => s + Number(a.notas[i] || 0), 0) / avs.filter(a => a.notas).length : 0);
+        const horasSem = lbs.reduce((a, lb) => a + horasSemLogbook(lb), 0);
+        return { lbs, cls, avs, datas, horasDia, horas, horasSem, conf, media, mediaCriterios, colaboradores: new Set(lbs.map(l => l.colaborador)).size };
+      };
+
+      // Filtros compactos do gestor: duas listas suspensas (unidade e supervisor)
+      const FiltroSelect = ({ icon, value, onChange, children, label }) => (
+        <label className={`relative inline-flex items-center h-9 rounded-lg border text-sm transition ${value
+          ? 'border-brand-300 bg-brand-50 text-brand-700 dark:border-brand-500/40 dark:bg-brand-500/10 dark:text-brand-300'
+          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'}`}>
+          <span className="absolute left-2.5 pointer-events-none opacity-70"><Icon name={icon} className="w-3.5 h-3.5" /></span>
+          <select aria-label={label} value={value} onChange={e => onChange(e.target.value)} className="appearance-none bg-transparent h-full pl-8 pr-7 font-medium cursor-pointer focus:outline-none rounded-lg max-w-[220px]">
+            {children}
+          </select>
+          <span className="absolute right-2 pointer-events-none opacity-60"><Icon name="chevron-down" className="w-3.5 h-3.5" /></span>
+        </label>
+      );
+      const temFiltro = filtroUnidade || filtroDashboardSupervisor;
+      const renderFiltros = () => isGestor && ['painel', 'documentos'].includes(secaoAtual.id) && (
+        <div className="flex flex-wrap items-center gap-2 print-hidden">
+          {FiltroSelect({ icon: 'anchor', label: 'Filtrar por unidade', value: filtroUnidade, onChange: setFiltroUnidade, children: [
+            <option key="" value="">Todas as unidades</option>, ...unidades.map(u => <option key={u} value={u}>{u}</option>)] })}
+          {FiltroSelect({ icon: 'user', label: 'Filtrar por supervisor', value: filtroDashboardSupervisor, onChange: setFiltroDashboardSupervisor, children: [
+            <option key="" value="">Todos os supervisores</option>, ...supervisoresN3List.map(s => <option key={s.id} value={s.nome}>{s.nome}</option>)] })}
+          {temFiltro && (
+            <button onClick={() => { setFiltroUnidade(''); setFiltroDashboardSupervisor(''); }} className="h-9 px-2.5 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-white inline-flex items-center gap-1 transition">
+              <Icon name="x" className="w-3.5 h-3.5" />Limpar
+            </button>
+          )}
+        </div>
+      );
+
+      // Barra interna da seção (alterna os documentos sem precisar de várias abas no menu)
+      const renderAbasSecao = () => secaoAtual.tabs.length > 1 && (
+        <div role="tablist" aria-label={secaoAtual.label} onKeyDown={navegarAbas} className="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 overflow-x-auto max-w-full print-hidden">
+          {secaoAtual.tabs.map(t => (
+            <button key={t} onClick={() => setActiveTab(t)} role="tab" aria-selected={activeTab === t} tabIndex={activeTab === t ? 0 : -1} data-aba={t}
+              className={`shrink-0 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${activeTab === t
+                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>
+              {rotulosAbas[t]}
+              {contagemAba[t] > 0 && <span className="min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full bg-red-500 text-white text-[10px] font-bold">{contagemAba[t]}</span>}
+            </button>
+          ))}
+        </div>
+      );
+
+      // Cartão de um caso de dano (usado pelo gestor e pelo supervisor)
+      const renderCasoDano = (d) => {
+        const [etapaLabel, etapaTone] = ETAPAS_DANO[d.etapa] || ETAPAS_DANO.reportado;
+        const urg = URGENCIAS[d.urgencia] || URGENCIAS.normal;
+        const mostraPassos = d.acao === 'substituir' || d.substituto;
+        const passo = passoTroca(d);
+        const encerradoSemTroca = d.etapa === 'encerrado' && d.resultado !== 'Substituído';
+        const hist = d.historico || [];
+        const aberto = !!historicoAberto[d.id];
+        return (
+          <Card key={d.id} className={`p-5 ${d.etapa !== 'encerrado' && d.urgencia === 'parada' ? 'ring-2 ring-red-500/40' : ''}`}>
+            <div className="flex flex-col sm:flex-row gap-4">
+              {d.foto
+                ? <button type="button" onClick={() => setFotoAmpliada(d.foto)} className="shrink-0 w-20 h-20 rounded-xl overflow-hidden ring-1 ring-slate-200 dark:ring-slate-700 hover:opacity-90" title="Ampliar foto"><img src={d.foto} alt="Foto da avaria" className="w-full h-full object-cover" /></button>
+                : <div className="shrink-0 w-12 h-12 rounded-xl grid place-items-center bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"><Icon name="alert-triangle" className="w-5 h-5" /></div>}
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono font-semibold text-sm text-slate-900 dark:text-white">{d.equipamentoTag}</span>
+                  {d.equipamento && <span className="text-sm text-slate-500">{d.equipamento}{d.kit ? ` · Kit ${d.kit}` : ''}</span>}
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <Badge tone={etapaTone} dot>{d.etapa === 'encerrado' ? `Encerrado · ${d.resultado}` : etapaLabel}</Badge>
+                  {d.etapa !== 'encerrado' && <Badge tone={urg[1]}>{d.urgencia === 'parada' && <Icon name="alert-octagon" className="w-3 h-3" />}{urg[0]}</Badge>}
+                  <Badge tone="slate">{ACOES_DANO[d.acao] || 'Apenas registro'}</Badge>
+                </div>
+                <p className="text-sm text-slate-700 dark:text-slate-300 mt-2">{d.falha}</p>
+                <p className="text-xs text-slate-400 mt-1">{isGestor ? `${d.supervisorN3} · ` : ''}Reportado em {fmtDataHora(d.reportadoEm) || d.data}</p>
+
+                {d.substituto && (
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs rounded-lg bg-indigo-50/60 dark:bg-indigo-500/10 px-3 py-2 text-indigo-900 dark:text-indigo-200">
+                    <span className="inline-flex items-center gap-1.5 font-semibold"><Icon name="repeat" className="w-3.5 h-3.5" />Substituto: {d.substituto.equipamento} <span className="font-mono">{d.substituto.tag}</span></span>
+                    {d.substituto.previsao && <span>Previsão: {d.substituto.previsao}</span>}
+                  </div>
+                )}
+                {d.obsGestor && <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 border-l-2 border-slate-200 dark:border-slate-700 pl-2">Gestor: {d.obsGestor}</p>}
+
+                {/* Etapas da troca */}
+                {mostraPassos && !encerradoSemTroca && (
+                  <ol className="mt-4 flex items-center">
+                    {PASSOS_TROCA.map((p, i) => (
+                      <li key={p} className={`flex items-center ${i < PASSOS_TROCA.length - 1 ? 'flex-1' : ''}`}>
+                        <div className="flex flex-col items-center gap-1">
+                          <span className={`w-6 h-6 rounded-full grid place-items-center text-[10px] font-bold ${i < passo || (i === passo && d.etapa === 'encerrado') ? 'bg-green-500 text-white' : i === passo ? 'bg-brand-600 text-white ring-4 ring-brand-500/20' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>
+                            {i < passo || (i === passo && d.etapa === 'encerrado') ? <Icon name="check" className="w-3.5 h-3.5" /> : i + 1}
+                          </span>
+                          <span className={`text-[10px] whitespace-nowrap ${i <= passo ? 'text-slate-700 dark:text-slate-200 font-semibold' : 'text-slate-400'}`}>{p}</span>
+                        </div>
+                        {i < PASSOS_TROCA.length - 1 && <span className={`flex-1 h-0.5 mx-1 mb-4 rounded ${i < passo ? 'bg-green-500' : 'bg-slate-200 dark:bg-slate-700'}`}></span>}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+
+                {/* Ações conforme perfil e etapa */}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {isGestor && d.etapa === 'reportado' && <Btn size="sm" variant="outline" icon="check" onClick={() => confirmarCiencia(d.id)}>Ok, ciente</Btn>}
+                  {isGestor && ['reportado', 'ciente'].includes(d.etapa) && <Btn size="sm" icon="gavel" onClick={() => abrirDecisao(d)}>Decidir</Btn>}
+                  {isGestor && d.etapa === 'troca_aprovada' && <Btn size="sm" icon="truck" onClick={() => marcarEnviado(d)}>Marcar como enviado</Btn>}
+                  {isGestor && d.etapa === 'inspecao' && <>
+                    <Btn size="sm" variant="soft" icon="badge-check" onClick={() => liberarAposInspecao(d)}>Aprovado · liberar</Btn>
+                    <Btn size="sm" variant="outline" icon="repeat" onClick={() => abrirDecisao(d, 'troca')}>Reprovado · aprovar troca</Btn>
+                    <Btn size="sm" variant="softDanger" icon="ban" onClick={() => abrirDecisao(d, 'condenar')}>Condenar</Btn>
+                  </>}
+                  {!isGestor && d.etapa === 'enviado' && <Btn size="sm" icon="package-check" onClick={() => confirmarRecebimento(d)}>Confirmar recebimento do substituto</Btn>}
+                  {!isGestor && d.etapa === 'troca_aprovada' && <span className="text-xs text-slate-500 inline-flex items-center gap-1.5"><Icon name="clock" className="w-3.5 h-3.5" />Aguardando o gestor enviar o substituto</span>}
+                  {hist.length > 0 && (
+                    <button type="button" onClick={() => setHistoricoAberto({ ...historicoAberto, [d.id]: !aberto })} className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">
+                      <Icon name="history" className="w-3.5 h-3.5" />Histórico ({hist.length})<Icon name={aberto ? 'chevron-up' : 'chevron-down'} className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {aberto && (
+                  <ol className="mt-3 border-l-2 border-slate-200 dark:border-slate-700 ml-1.5 space-y-3 anim-fade">
+                    {hist.map((h, i) => (
+                      <li key={i} className="relative pl-4">
+                        <span className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-brand-500"></span>
+                        <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">{h.evento} <span className="font-normal text-slate-400">· {fmtDataHora(h.quando)} · {h.quem}</span></p>
+                        {h.detalhe && <p className="text-xs text-slate-500 mt-0.5">{h.detalhe}</p>}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            </div>
+          </Card>
+        );
+      };
+      const ordemCaso = (d) => (d.etapa === 'encerrado' ? 10 : 0) + ({ parada: 0, urgente: 1, normal: 2 }[d.urgencia] ?? 2);
+      const ordenarCasos = (lista) => [...lista].sort((a, b) => ordemCaso(a) - ordemCaso(b) || b.id - a.id);
+
+      // Ações de edição por linha (somente supervisor)
+      const renderAcoesLinha = (onEdit, onDelete, extra) => !isGestor && (
+        <div className="flex items-center justify-end gap-1">
+          {extra}
+          <button type="button" onClick={onEdit} title="Editar" className="p-2 rounded-lg text-slate-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 transition"><Icon name="pencil" className="w-4 h-4" /></button>
+          <button type="button" onClick={onDelete} title="Excluir" className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition"><Icon name="trash-2" className="w-4 h-4" /></button>
+        </div>
+      );
+
+      const renderNavItem = (item) => {
+        const ativo = secaoAtual.id === item.id;
+        return (
+          <button key={item.id} onClick={() => irPara(item.tabs[0])} data-nav data-nav-ativo={ativo ? 'true' : undefined} aria-current={ativo ? 'page' : undefined}
+            title={`${item.label} (Alt+${secoes.indexOf(item) + 1})`}
+            className={`group w-full flex items-center gap-3 px-3 h-10 rounded-xl text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${ativo
+              ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800/70 dark:hover:text-white'}`}>
+            <Icon name={item.icon} className={`w-[18px] h-[18px] ${ativo ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'}`} />
+            <span className="flex-1 text-left truncate">{item.label}</span>
+            {item.count > 0 && <Badge tone={item.tone}>{item.count}</Badge>}
+            <kbd className="hidden lg:inline text-[10px] font-mono text-slate-300 dark:text-slate-600 group-hover:text-slate-400">Alt {secoes.indexOf(item) + 1}</kbd>
+          </button>
+        );
+      };
+
+      const renderSidebar = () => (
+        <div className="h-full flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200/80 dark:border-slate-800">
+          <div className="h-16 flex items-center gap-3 px-5 border-b border-slate-100 dark:border-slate-800">
+            <div className="min-w-0 rounded-lg dark:bg-white dark:px-2 dark:py-1">
+              <img src="assets/logo-horizontal.png" alt="TechOcean | AASJ Serviços Industriais" className="h-10 w-auto max-w-full object-contain" />
+            </div>
+            <button onClick={() => setMenuAberto(false)} className="lg:hidden ml-auto p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Fechar menu">
+              <Icon name="x" className="w-5 h-5" />
+            </button>
+          </div>
+
+          <nav className="flex-1 overflow-y-auto p-3 pt-4 space-y-0.5" onKeyDown={navegarMenu} aria-label="Menu principal">
+            {secoes.map(renderNavItem)}
+          </nav>
+
+          <div className="p-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+            <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+              <Avatar nome={usuarioLogado.nome} size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold truncate text-slate-900 dark:text-white">{usuarioLogado.nome}</p>
+                <p className="text-[11px] font-medium text-brand-600 dark:text-brand-400">{isGestor ? 'Gestor Master' : 'Supervisor N3'}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Btn variant="ghost" size="sm" icon={darkMode ? 'sun' : 'moon'} onClick={() => setDarkMode(!darkMode)}>{darkMode ? 'Claro' : 'Escuro'}</Btn>
+              <Btn variant="softDanger" size="sm" icon="log-out" onClick={() => { setNotifAberto(false); setUsuarioLogado(null); }}>Sair</Btn>
+            </div>
+          </div>
+        </div>
+      );
+
+      const nomesColab = (lista) => lista.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>);
+
+      const abrirNovoColab = (onCriado, permitirN3 = false) => { setNovoColab(novoColabVazio); setErroColab(''); setModalColab({ onCriado, permitirN3 }); };
+      const salvarNovoColab = (e) => {
+        e.preventDefault();
+        const nome = novoColab.nome.trim().replace(/\s+/g, ' ');
+        const registro = novoColab.registro.trim().toUpperCase();
+        if (colaboradores.some(c => c.nome.toLowerCase() === nome.toLowerCase())) { setErroColab(`${nome} já está cadastrado.`); return; }
+        if (colaboradores.some(c => c.registro.toUpperCase() === registro)) { setErroColab(`O registro ${registro} já pertence a outro colaborador.`); return; }
+        const colab = { id: Date.now(), nome, nivel: novoColab.nivel, funcao: novoColab.funcao.trim() || 'Escalador', registro, validadeIrata: novoColab.validadeIrata, statusCert: 'Regular', cadastradoPor: usuarioLogado.nome };
+        setColaboradores([...colaboradores, colab]);
+        modalColab?.onCriado?.(colab.nome);
+        setModalColab(null);
+      };
+      // Link "+ Cadastrar novo colaborador" exibido abaixo das listas de colaboradores
+      const renderLinkNovoColab = (onCriado, permitirN3 = false) => (
+        <button type="button" onClick={() => abrirNovoColab(onCriado, permitirN3)} className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline underline-offset-4">
+          <Icon name="user-plus" className="w-3.5 h-3.5" />Não está na lista? Cadastrar novo colaborador
+        </button>
+      );
+
+      return (
+        <div className="min-h-screen lg:pl-64">
+
+          {/* SIDEBAR DESKTOP */}
+          <aside className="hidden lg:block fixed inset-y-0 left-0 w-64 z-30 print-hidden">{renderSidebar()}</aside>
+
+          {/* SIDEBAR MOBILE (GAVETA) */}
+          {menuAberto && (
+            <div className="lg:hidden fixed inset-0 z-40 print-hidden">
+              <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm anim-fade" onClick={() => setMenuAberto(false)}></div>
+              <aside className="absolute inset-y-0 left-0 w-72 max-w-[85vw] shadow-2xl anim-slide">{renderSidebar()}</aside>
+            </div>
+          )}
+
+          {/* TOPO */}
+          <header className="sticky top-0 z-20 h-16 flex items-center gap-3 px-4 sm:px-6 lg:px-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800 print-hidden">
+            <button onClick={() => setMenuAberto(true)} className="lg:hidden p-2 -ml-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Abrir menu">
+              <Icon name="menu" className="w-5 h-5" />
+            </button>
+            <div className="relative flex-1 max-w-sm">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400"><Icon name="search" className="w-4 h-4" /></span>
+              <input id="busca-global" type="text" placeholder="Buscar no sistema...  ( / )" className="w-full h-10 pl-9 pr-3 bg-slate-100/80 dark:bg-slate-900 border border-transparent rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition" />
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <div className="hidden md:flex items-center gap-1.5">
+                <Badge tone="slate"><Icon name="building-2" className="w-3 h-3" /> {campanha.cliente}</Badge>
+                <Badge tone="emerald"><Icon name="anchor" className="w-3 h-3" /> {isGestor ? (filtroUnidade || 'Todas as unidades') : campanha.unidade}</Badge>
+              </div>
+              <button onClick={() => setAjudaTeclado(true)} title="Atalhos de teclado ( ? )" aria-label="Atalhos de teclado" className="hidden md:grid h-10 w-10 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+                <Icon name="keyboard" className="w-5 h-5" />
+              </button>
+              {/* Sino de notificações */}
+              <div className="relative">
+                <button onClick={() => setNotifAberto(!notifAberto)} aria-label={`Notificações${naoLidas ? ` (${naoLidas} não lidas)` : ''}`}
+                  className={`relative h-10 w-10 grid place-items-center rounded-xl border transition ${notifAberto ? 'bg-slate-100 border-slate-200 dark:bg-slate-800 dark:border-slate-700' : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800'} text-slate-600 dark:text-slate-300`}>
+                  <Icon name="bell" className="w-5 h-5" />
+                  {naoLidas > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full bg-red-600 text-white text-[10px] font-bold ring-2 ring-white dark:ring-slate-950">
+                      {naoLidas}
+                    </span>
+                  )}
+                </button>
+                {notifAberto && (<>
+                  <div className="fixed inset-0 z-30" onClick={() => setNotifAberto(false)}></div>
+                  <div className="absolute right-0 top-12 z-40 w-[380px] max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl anim-pop overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                      <p className="font-semibold text-sm text-slate-900 dark:text-white">Notificações</p>
+                      {naoLidas > 0 && <button onClick={marcarTodasLidas} className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">Marcar todas como lidas</button>}
+                    </div>
+                    {minhasNotificacoes.length === 0 ? (
+                      <EmptyState icon="bell-off" title="Nenhuma notificação" text={isGestor ? 'Reportes de danos aparecem aqui.' : 'Confirmações do gestor aparecem aqui.'} />
+                    ) : (
+                      <ul className="max-h-[420px] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                        {minhasNotificacoes.map(n => {
+                          const dano = danosReports.find(d => d.id === n.danoId);
+                          const pendente = isGestor && n.tipo === 'dano' && dano && !dano.ciente;
+                          return (
+                            <li key={n.id} className={`px-4 py-3 flex gap-3 ${n.lida ? '' : 'bg-brand-50/50 dark:bg-brand-500/5'}`}>
+                              <div className={`mt-0.5 p-2 h-fit rounded-lg ${n.tipo === 'dano' ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400' : 'bg-green-50 text-green-600 dark:bg-green-500/10 dark:text-green-400'}`}>
+                                <Icon name={n.tipo === 'dano' ? 'alert-triangle' : 'check-circle-2'} className="w-4 h-4" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <button onClick={() => abrirNotificacao(n)} className="text-left w-full">
+                                  <p className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">{n.titulo}{!n.lida && <span className="w-2 h-2 rounded-full bg-brand-500 shrink-0"></span>}</p>
+                                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{n.texto}</p>
+                                  <p className="text-[11px] text-slate-400 mt-1">{fmtDataHora(n.data)}</p>
+                                </button>
+                                {pendente && <Btn size="sm" icon="check" className="mt-2" onClick={() => confirmarCiencia(n.danoId)}>Ok, ciente</Btn>}
+                                {isGestor && n.tipo === 'dano' && dano?.ciente && <Badge tone="green" className="mt-2"><Icon name="check" className="w-3 h-3" />Ciência confirmada {fmtDataHora(dano.cienteEm)}</Badge>}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                </>)}
+              </div>
+              <Btn size="md" icon="download" onClick={() => window.print()}><span className="hidden sm:inline">Exportar</span></Btn>
+            </div>
+          </header>
+
+          {/* CONTEÚDO PRINCIPAL */}
+          <main className="px-4 sm:px-6 lg:px-8 py-6 lg:py-8 max-w-7xl">
+
+            <div className="mb-5">
+              <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{tituloPagina}</h2>
+              <p className="text-sm text-slate-500 mt-1">{descPagina}</p>
+            </div>
+            {(secaoAtual.tabs.length > 1 || acao || (isGestor && ['painel', 'documentos'].includes(secaoAtual.id))) && (
+              <div className="mb-5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="min-w-0">{renderAbasSecao()}</div>
+                <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                  {renderFiltros()}
+                  {acao && <Btn variant={acao.variant || 'primary'} icon={acao.icon} onClick={acao.onClick} className="shrink-0">{acao.label}</Btn>}
+                </div>
+              </div>
+            )}
+
+            <div key={activeTab} className="anim-fade">
+
+            {/* ABA: APROVAÇÕES DE CADASTRO */}
+            {activeTab === 'autorizacoes' && isGestor && (
+              <Card>
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                  <h3 className="font-semibold text-sm text-slate-900 dark:text-white">Supervisores N3 pendentes de autorização</h3>
+                  <Badge tone={pendentes.length ? 'amber' : 'slate'}>{pendentes.length} pendente{pendentes.length === 1 ? '' : 's'}</Badge>
+                </div>
+                {pendentes.length === 0 ? (
+                  <EmptyState icon="user-check" title="Nenhum cadastro pendente" text="Novas solicitações de Supervisores N3 aparecem aqui." />
+                ) : (
+                  <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {pendentes.map(u => (
+                      <li key={u.id} className="p-4 sm:px-5 flex flex-col sm:flex-row sm:items-center gap-4">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <Avatar nome={u.nome} tone="slate" />
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm text-slate-900 dark:text-white">{u.nome}</p>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 mt-0.5">
+                              <span className="inline-flex items-center gap-1"><Icon name="mail" className="w-3.5 h-3.5" />{u.email}</span>
+                              <span className="inline-flex items-center gap-1 font-mono"><Icon name="badge-check" className="w-3.5 h-3.5" />{u.registro}</span>
+                              <span className="inline-flex items-center gap-1"><Icon name="calendar" className="w-3.5 h-3.5" />Validade IRATA: {u.validadeIrata}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Btn size="sm" icon="check" onClick={() => aprovarUsuario(u.id)}>Aprovar</Btn>
+                          <Btn size="sm" variant="softDanger" icon="x" onClick={() => rejeitarUsuario(u.id)}>Rejeitar</Btn>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+            )}
+
+            {/* ABA: UNIDADES (cadastro pelo gestor) */}
+            {activeTab === 'unidades' && isGestor && (
+              <Card className="max-w-2xl">
+                <form onSubmit={adicionarUnidade} className="p-5 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex gap-2">
+                    <input value={novaUnidade} onChange={e => { setNovaUnidade(e.target.value); setErroUnidade(''); }} placeholder="Nome da nova unidade (ex: FRADE, P-62)" className={inputCls + " uppercase placeholder:normal-case"} aria-label="Nova unidade" />
+                    <Btn type="submit" icon="plus" size="lg" className="shrink-0" disabled={!novaUnidade.trim()}>Cadastrar</Btn>
+                  </div>
+                  {erroUnidade && <p className="text-xs text-red-600 mt-2">{erroUnidade}</p>}
+                </form>
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {unidades.map(u => {
+                    const qtd = docsDaUnidade(u);
+                    return (
+                      <li key={u} className="px-5 py-3 flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400"><Icon name="anchor" className="w-4 h-4" /></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm text-slate-900 dark:text-white">{u}</p>
+                          <p className="text-xs text-slate-500">{qtd} documento{qtd === 1 ? '' : 's'}</p>
+                        </div>
+                        <button type="button" onClick={() => removerUnidade(u)} disabled={qtd > 0}
+                          title={qtd > 0 ? 'Não é possível remover: há documentos nesta unidade' : 'Remover unidade'}
+                          className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 disabled:cursor-not-allowed">
+                          <Icon name="trash-2" className="w-4 h-4" />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Card>
+            )}
+
+            {/* ABA: QUARENTENA */}
+            {activeTab === 'quarentena' && isGestor && (
+              <Card>
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                  <h3 className="font-semibold text-sm text-slate-900 dark:text-white">Equipamentos bloqueados em quarentena</h3>
+                  <Badge tone={emQuarentena.length ? 'rose' : 'green'} dot>{emQuarentena.length ? `${emQuarentena.length} bloqueado${emQuarentena.length === 1 ? '' : 's'}` : 'Tudo regular'}</Badge>
+                </div>
+                {emQuarentena.length === 0 ? (
+                  <EmptyState icon="shield-check" title="Nenhum equipamento em quarentena" text="Inventário 100% regular." />
+                ) : (
+                  <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {emQuarentena.map(eq => (
+                      <li key={eq.id} className="p-4 sm:px-5 flex flex-col sm:flex-row sm:items-center gap-4">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="p-2.5 rounded-xl bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"><Icon name="shield-alert" className="w-5 h-5" /></div>
+                          <div>
+                            <p className="font-semibold text-sm text-slate-900 dark:text-white">{eq.equipamento} <span className="font-normal text-slate-500">· {eq.fabricante}</span></p>
+                            <p className="text-xs text-slate-500 font-mono mt-0.5">TAG {eq.tag} · Kit {eq.kit}</p>
+                          </div>
+                        </div>
+                        <Btn size="sm" variant="soft" icon="unlock" onClick={() => liberarQuarentena(eq.tag)}>Liberar quarentena</Btn>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+            )}
+
+            {/* EPIs E DANOS (gestor): danos com confirmação de ciência + entregas de EPI */}
+            {activeTab === 'auditoria' && isGestor && (
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                <div className="xl:col-span-2 space-y-3">
+                  {danosReports.length === 0
+                    ? <Card><EmptyState icon="shield-check" title="Nenhum dano reportado" text="Quando um supervisor reportar um dano, ele aparece aqui e no sino de notificações." /></Card>
+                    : ordenarCasos(danosReports).map(renderCasoDano)}
+                </div>
+                <Card className="flex flex-col">
+                  <div className="flex items-center gap-2.5 px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                    <Icon name="box" className="w-4 h-4 text-brand-500" />
+                    <h4 className="font-semibold text-sm text-slate-900 dark:text-white flex-1">FO-48 · Entrega de EPIs</h4>
+                    <Badge tone="slate">{entregas.length}</Badge>
+                  </div>
+                  {entregas.length === 0 ? <EmptyState icon="inbox" title="Sem registros" /> : (
+                    <ul className="p-3 space-y-2">
+                      {entregas.map(e => (
+                        <li key={e.id} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-sm">
+                          <span className="font-mono font-semibold text-slate-800 dark:text-slate-100">Kit {e.kit}</span>
+                          <span className="text-slate-500 truncate">{e.usuario}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Card>
+              </div>
+            )}
+            {/* ABA FO-45 (LOGBOOK) */}
+            {activeTab === 'fo45' && (() => {
+              const lbsVisiveis = logbooks.filter(filtrarItemOperacional);
+              const datasGrade = datasDosLogbooks(lbsVisiveis);
+              return (<>
+              <Card className="overflow-hidden">
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-5 py-3 border-b border-slate-100 dark:border-slate-800 text-xs text-slate-500">
+                  <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-brand-100 dark:bg-brand-500/20 ring-1 ring-brand-300/60"></span>Com acesso (corda)</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-slate-200 dark:bg-slate-700 ring-1 ring-slate-300/60"></span>Sem acesso</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-100 dark:bg-amber-500/20 ring-1 ring-amber-300/60"></span>No limite</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-hatch ring-1 ring-slate-200 dark:ring-slate-700"></span>Fora do embarque (bloqueado)</span>
+                  <span className="inline-flex items-center gap-1.5"><Icon name="info" className="w-3.5 h-3.5" />Limites por dia: {LIMITE_HORAS_DIA}h com acesso · {LIMITE_TOTAL_DIA}h somando com e sem acesso</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border-separate border-spacing-0">
+                    <thead>
+                      <tr>
+                        {/* Colunas fixas à esquerda: fundo sólido para nada passar por baixo ao rolar */}
+                        <th className={thCls + " sticky left-0 z-20 !bg-slate-50 dark:!bg-slate-900 w-[150px] min-w-[150px] max-w-[150px] sm:w-[270px] sm:min-w-[270px] sm:max-w-[270px]"}><span className="sm:hidden">Colaborador</span><span className="hidden sm:inline">Colaborador · embarque</span></th>
+                        <th className={thCls + " sticky left-[150px] sm:left-[270px] z-20 !bg-slate-50 dark:!bg-slate-900 !px-2 w-[52px] min-w-[52px] sm:w-[96px] sm:min-w-[96px] border-r border-slate-200/80 dark:border-slate-700 shadow-[4px_0_6px_-4px_rgba(15,23,42,0.12)]"}>Horas</th>
+                        {datasGrade.map(iso => {
+                          const fds = new Date(iso + 'T00:00:00Z').getUTCDay() % 6 === 0; // sábado/domingo
+                          return (
+                            <th key={iso} title={fmtData(iso)} className={thCls + ` !px-0.5 !py-2 text-center w-9 tabular-nums !normal-case !tracking-normal ${fds ? '!bg-slate-100/80 dark:!bg-slate-800/70' : ''}`}>
+                              <span className="block text-[9px] font-medium text-slate-400">{diaSemana(iso)}</span>
+                              <span className="block text-[11px] text-slate-700 dark:text-slate-200">{iso.slice(8, 10)}</span>
+                              <span className="block text-[9px] font-medium text-slate-400">{iso.slice(5, 7)}</span>
+                            </th>
+                          );
+                        })}
+                        <th className={thCls + " text-center sm:sticky right-0 z-20 !bg-slate-50 dark:!bg-slate-900 border-l border-slate-200/80 dark:border-slate-700 shadow-[-4px_0_6px_-4px_rgba(15,23,42,0.12)]"}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lbsVisiveis.map((lb, li) => {
+                        const t = horasLogbook(lb), ts = horasSemLogbook(lb);
+                        return (
+                          <tr key={lb.id} className="group">
+                            <td className="sticky left-0 z-10 px-3 py-2.5 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800 w-[150px] min-w-[150px] max-w-[150px] sm:w-[270px] sm:min-w-[270px] sm:max-w-[270px]">
+                              <div className="flex items-start gap-2.5">
+                                <span className="hidden sm:block mt-0.5"><Avatar nome={lb.colaborador} size="sm" /></span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <p className="font-semibold text-sm text-slate-900 dark:text-white truncate">{lb.colaborador}</p>
+                                    <Badge tone="sky" className="!px-1.5 shrink-0">{lb.nivel}</Badge>
+                                  </div>
+                                  <p className="text-[11px] text-slate-500 truncate"><span className="font-semibold text-brand-600 dark:text-brand-400">{lb.unidade}</span> · {isGestor ? `Sup. ${lb.supervisorN3}` : lb.funcao}</p>
+                                  {lb.embarqueInicio
+                                    ? <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate inline-flex items-center gap-1 max-w-full tabular-nums" title={`Embarque de ${diasPeriodo(lb.embarqueInicio, lb.embarqueFim)} dias`}><Icon name="ship" className="w-3 h-3 text-brand-500 shrink-0" />{fmtPeriodo(lb)} · {diasPeriodo(lb.embarqueInicio, lb.embarqueFim)}d</p>
+                                    : <p className="text-[11px] text-amber-600 dark:text-amber-400 inline-flex items-center gap-1"><Icon name="alert-circle" className="w-3 h-3" />Embarque não informado</p>}
+                                  {!isGestor && (
+                                    <div className="flex items-center gap-0.5 -ml-1.5 mt-1">
+                                      <button type="button" onClick={() => abrirEditarFO45(lb)} title="Editar colaborador e embarque" className="p-1.5 rounded-md text-slate-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 transition"><Icon name="pencil" className="w-3.5 h-3.5" /></button>
+                                      <button type="button" onClick={() => zerarFO45(lb)} title="Zerar horas" className="p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition"><Icon name="rotate-ccw" className="w-3.5 h-3.5" /></button>
+                                      <button type="button" onClick={() => excluirFO45(lb)} title="Remover do logbook" className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition"><Icon name="trash-2" className="w-3.5 h-3.5" /></button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="sticky left-[150px] sm:left-[270px] z-10 px-2 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 border-b border-r border-slate-100 dark:border-slate-700 shadow-[4px_0_6px_-4px_rgba(15,23,42,0.12)] w-[52px] min-w-[52px] sm:w-[96px] sm:min-w-[96px]">
+                              <div className="flex flex-col gap-1 text-[11px] font-semibold">
+                                <span className="h-7 flex items-center gap-1 text-brand-700 dark:text-brand-300"><span className="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0"></span><span className="sm:hidden">Com</span><span className="hidden sm:inline">Com acesso</span></span>
+                                <span className="h-7 flex items-center gap-1 text-slate-500"><span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0"></span><span className="sm:hidden">Sem</span><span className="hidden sm:inline">Sem acesso</span></span>
+                              </div>
+                            </td>
+                            {datasGrade.map((iso, ci) => {
+                              const v = (lb.horas || {})[iso] || 0;
+                              const navAttrs = (linha) => ({ 'data-grade': 'fo45', 'data-linha': linha, 'data-coluna': ci, 'data-max-linha': lbsVisiveis.length * 2 - 1, 'data-max-coluna': datasGrade.length - 1, onKeyDown: navegarGrade, onFocus: (e) => e.target.select() });
+                              const vs = (lb.horasSem || {})[iso] || 0;
+                              if (!dentroPeriodo(lb, iso)) return (
+                                <td key={iso} className="p-0.5 border-b border-slate-100 dark:border-slate-800">
+                                  <div title={`${fmtData(iso)}: fora do período de embarque`} className="w-9 h-[60px] rounded-lg bg-hatch ring-1 ring-inset ring-slate-200/70 dark:ring-slate-700/60 cursor-not-allowed"></div>
+                                </td>
+                              );
+                              const noTotal = v + vs >= LIMITE_TOTAL_DIA;
+                              const base = 'w-9 h-7 text-center rounded-md text-xs font-semibold tabular-nums border focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition disabled:cursor-not-allowed';
+                              const vazio = 'bg-transparent border-slate-200/70 dark:border-slate-700/60 text-slate-500 hover:border-slate-300 dark:hover:border-slate-600';
+                              const ambar = 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300';
+                              return (
+                              <td key={iso} className="p-0.5 border-b border-slate-100 dark:border-slate-800 group-hover:bg-slate-50 dark:group-hover:bg-slate-800/60" title={`${fmtData(iso)} · ${v}h com acesso + ${vs}h sem acesso = ${v + vs}h`}>
+                                <div className="flex flex-col gap-1">
+                                  <input {...navAttrs(li * 2)} disabled={isGestor} aria-label={`Horas com acesso em ${fmtData(iso)}`} type="number" min="0" max={LIMITE_HORAS_DIA} step="0.5" value={v||''} onChange={e => handleUpdateHoraLogbook(lb.id, iso, e.target.value, 'horas')}
+                                    className={`${base} ${v >= LIMITE_HORAS_DIA || (noTotal && v > 0) ? ambar : v > 0 ? 'bg-brand-50 border-brand-200 text-brand-700 dark:bg-brand-500/10 dark:border-brand-500/30 dark:text-brand-300' : vazio}`} />
+                                  <input {...navAttrs(li * 2 + 1)} disabled={isGestor} aria-label={`Horas sem acesso em ${fmtData(iso)}`} type="number" min="0" max={LIMITE_TOTAL_DIA} step="0.5" value={vs||''} onChange={e => handleUpdateHoraLogbook(lb.id, iso, e.target.value, 'horasSem')}
+                                    className={`${base} ${noTotal && vs > 0 ? ambar : vs > 0 ? 'bg-slate-200/80 border-slate-300 text-slate-700 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100' : vazio}`} />
+                                </div>
+                              </td>
+                              );
+                            })}
+                            <td className="sm:sticky right-0 z-10 px-3 text-right bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 border-b border-l border-slate-100 dark:border-slate-700 shadow-[-4px_0_6px_-4px_rgba(15,23,42,0.12)] whitespace-nowrap">
+                              <div className="flex flex-col gap-1 tabular-nums">
+                                <span className="h-7 flex items-center justify-end text-sm font-bold text-brand-600 dark:text-brand-400" title="Horas com acesso">{t}h</span>
+                                <span className="h-7 flex items-center justify-end text-sm font-semibold text-slate-500" title="Horas sem acesso">{ts}h</span>
+                              </div>
+                              <span className="block text-[10px] text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-0.5 mt-0.5">= {t + ts}h</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {lbsVisiveis.length === 0 && <EmptyState icon="clock" title="Nenhum colaborador no logbook" />}
+                </div>
+              </Card>
+            </>); })()}
+
+            {/* ABA CL-01 (CHECKLIST & PT) */}
+            {activeTab === 'cl01' && (<>
+              <Card className="overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr>
+                        <th className={thCls}>Data</th><th className={thCls}>Unidade</th><th className={thCls}>PT / APR</th><th className={thCls}>Escalador</th><th className={thCls}>Verificações</th><th className={thCls}>Kit</th><th className={thCls}>Rescatista N3</th><th className={thCls}>Atividade</th>
+                        {isGestor ? <th className={thCls}>Supervisor</th> : <th className={thCls} aria-label="Ações"></th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {checklistsKits.filter(filtrarItemOperacional).map(c => {
+                        const cf = conformidadeCL(c);
+                        return (
+                        <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                          <td className={tdCls + " text-slate-500 tabular-nums"}>{c.data}</td>
+                          <td className={tdCls}><Badge tone="sky"><Icon name="anchor" className="w-3 h-3" />{c.unidade}</Badge></td>
+                          <td className={tdCls}><span className="font-mono text-xs font-semibold text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-500/10 px-2 py-1 rounded-md">{c.ptNum} / {c.aprNum}</span></td>
+                          <td className={tdCls}><div className="flex items-center gap-2.5"><Avatar nome={c.escalador} size="sm" /><span className="font-semibold text-slate-900 dark:text-white">{c.escalador}</span></div></td>
+                          <td className={tdCls} title={ITENS_CHECKLIST.filter(([k]) => !c.itens?.[k]).map(([, l]) => 'Pendente: ' + l).join('\n') || 'Todos os itens verificados'}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-16 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden"><div className={`h-full rounded-full ${cf.pct === 100 ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: cf.pct + '%' }}></div></div>
+                              <span className={`text-xs font-semibold tabular-nums ${cf.pct === 100 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>{cf.ok}/{cf.total}</span>
+                            </div>
+                          </td>
+                          <td className={tdCls}><Badge tone="slate">Kit {c.kit}</Badge></td>
+                          <td className={tdCls + " text-slate-700 dark:text-slate-300"}>{c.rescatista}</td>
+                          <td className={tdCls + " text-slate-700 dark:text-slate-300"}>{c.atividade}</td>
+                          {isGestor ? <td className={tdCls + " text-slate-500"}>{c.supervisorN3}</td> : <td className={tdCls + " !py-1"}>{renderAcoesLinha(() => abrirEditarCL01(c), () => excluirCL01(c))}</td>}
+                        </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {checklistsKits.filter(filtrarItemOperacional).length === 0 && <EmptyState icon="clipboard-check" title="Nenhum checklist registrado" />}
+                </div>
+              </Card>
+            </>)}
+
+            {/* ABA FO-48 (CUSTÓDIA EPI) */}
+            {!isGestor && activeTab === 'fo48' && (
+              <Card className="overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr><th className={thCls}>Kit / Usuário</th><th className={thCls}>Data</th><th className={thCls}>Condição</th></tr></thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {entregas.filter(filtrarItemOperacional).map(e => (
+                        <tr key={e.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                          <td className={tdCls}>
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500"><Icon name="box" className="w-4 h-4" /></div>
+                              <div><p className="font-semibold text-slate-900 dark:text-white">Kit {e.kit}</p><p className="text-xs text-slate-500">{e.usuario}</p></div>
+                            </div>
+                          </td>
+                          <td className={tdCls + " text-slate-500 tabular-nums"}>{e.dataRetirada}</td>
+                          <td className={tdCls}><Badge tone="green" dot>{e.condRetirada}</Badge></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {entregas.filter(filtrarItemOperacional).length === 0 && <EmptyState icon="box" title="Nenhuma retirada registrada" />}
+                </div>
+              </Card>
+            )}
+
+            {/* ABA RL-32 (DANOS) */}
+            {!isGestor && activeTab === 'rl32' && (
+              <div className="space-y-3">
+                {danosReports.filter(filtrarItemOperacional).length === 0
+                  ? <Card><EmptyState icon="shield-check" title="Nenhum dano reportado" text="Nenhum dano reportado na faina atual." /></Card>
+                  : ordenarCasos(danosReports.filter(filtrarItemOperacional)).map(renderCasoDano)}
+              </div>
+            )}
+            {/* ABA FO-41 (AVALIAÇÃO) */}
+            {activeTab === 'fo41' && (<>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {avaliacoes.filter(filtrarItemOperacional).length === 0 && <Card className="lg:col-span-2"><EmptyState icon="award" title="Nenhuma avaliação registrada" /></Card>}
+                {avaliacoes.filter(filtrarItemOperacional).map(av => (
+                  <Card key={av.id} className="p-5">
+                    <div className="flex items-start gap-4">
+                      <Avatar nome={av.colaborador} tone="violet" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-slate-900 dark:text-white">{av.colaborador}</p>
+                        <p className="text-xs text-slate-500"><span className="font-semibold text-brand-600 dark:text-brand-400">{av.unidade}</span> · {av.funcao}{av.data ? ` · ${av.data}` : ''}{isGestor ? ` · Sup. ${av.supervisorN3}` : ''}</p>
+                      </div>
+                      <div className="text-center shrink-0 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 ring-1 ring-inset ring-indigo-200/70 dark:ring-indigo-500/20">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-500">Nota</p>
+                        <p className="font-display text-xl font-bold text-indigo-700 dark:text-indigo-300 tabular-nums leading-tight">{av.soma}<span className="text-xs font-semibold text-indigo-400">/100</span></p>
+                      </div>
+                    </div>
+                    {av.notas && (
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-1.5">
+                        {CRITERIOS_FO41.map((cr, i) => (
+                          <div key={cr} className="flex items-center gap-2 text-xs">
+                            <span className="flex-1 truncate text-slate-500" title={cr}>{cr}</span>
+                            <div className="w-16 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden"><div className={`h-full rounded-full ${av.notas[i] >= 8 ? 'bg-indigo-500' : av.notas[i] >= 6 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: (av.notas[i] * 10) + '%' }}></div></div>
+                            <span className="w-5 text-right font-semibold tabular-nums text-slate-700 dark:text-slate-200">{av.notas[i]}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {av.anotacoes && <p className="mt-4 text-sm text-slate-600 dark:text-slate-300 border-l-2 border-indigo-200 dark:border-indigo-500/30 pl-3">{av.anotacoes}</p>}
+                    {!isGestor && <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">{renderAcoesLinha(() => abrirEditarFO41(av), () => excluirFO41(av))}</div>}
+                  </Card>
+                ))}
+              </div>
+            </>)}
+
+            {/* VISÃO DO GESTOR: DOCUMENTAÇÃO POR SUPERVISOR */}
+            {activeTab === 'painel' && isGestor && (() => {
+              const s = statsSupervisor(filtroDashboardSupervisor);
+              const maxDia = Math.max(LIMITE_HORAS_DIA, ...s.horasDia);
+              return (
+                <div className="space-y-5">
+                  {/* Alertas que pedem ação do gestor */}
+                  {(pendentes.length > 0 || emQuarentena.length > 0 || casosGestor.length > 0) && (
+                    <div className="flex flex-wrap gap-2">
+                      {casosGestor.length > 0 && <button onClick={() => setActiveTab('auditoria')} className={`inline-flex items-center gap-2 h-9 px-3 rounded-lg text-sm font-semibold text-white shadow-sm transition ${casosParados.length ? 'bg-red-600 hover:bg-red-700 shadow-red-600/25 animate-pulse' : 'bg-brand-600 hover:bg-brand-700 shadow-brand-600/25'}`}><Icon name="bell-ring" className="w-4 h-4" />{casosGestor.length} caso{casosGestor.length === 1 ? '' : 's'} de dano aguardando você{casosParados.length ? ` · ${casosParados.length} com atividade parada` : ''}<Icon name="arrow-right" className="w-3.5 h-3.5" /></button>}
+                      {pendentes.length > 0 && <button onClick={() => setActiveTab('autorizacoes')} className="inline-flex items-center gap-2 h-9 px-3 rounded-lg text-sm font-medium bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20 transition"><Icon name="user-check" className="w-4 h-4" />{pendentes.length} cadastro{pendentes.length === 1 ? '' : 's'} aguardando aprovação<Icon name="arrow-right" className="w-3.5 h-3.5" /></button>}
+                      {emQuarentena.length > 0 && <button onClick={() => setActiveTab('quarentena')} className="inline-flex items-center gap-2 h-9 px-3 rounded-lg text-sm font-medium bg-red-50 text-red-700 ring-1 ring-inset ring-red-200 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/20 transition"><Icon name="shield-alert" className="w-4 h-4" />{emQuarentena.length} equipamento{emQuarentena.length === 1 ? '' : 's'} em quarentena<Icon name="arrow-right" className="w-3.5 h-3.5" /></button>}
+                    </div>
+                  )}
+                  {/* KPIs do filtro atual */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    {[
+                      ['clock', 'Horas em corda', `${s.horas}h`, `+ ${s.horasSem}h sem acesso · ${s.colaboradores} colaborador${s.colaboradores === 1 ? '' : 'es'}`, 'sky'],
+                      ['alert-octagon', `Dias no limite (${LIMITE_HORAS_DIA}h)`, s.lbs.reduce((a, lb) => a + Object.values(lb.horas || {}).filter(v => v >= LIMITE_HORAS_DIA).length, 0), 'lançamentos por pessoa', 'amber'],
+                      ['clipboard-check', 'Conformidade CL-01', s.conf === null ? '—' : `${s.conf}%`, `${s.cls.length} checklist${s.cls.length === 1 ? '' : 's'}`, s.conf === null || s.conf === 100 ? 'green' : 'amber'],
+                      ['award', 'Média comportamental', s.media === null ? '—' : s.media, `${s.avs.length} avaliaç${s.avs.length === 1 ? 'ão' : 'ões'} (0–100)`, s.media === null ? 'violet' : toneNota(s.media)],
+                    ].map(([ic, label, valor, sub, tone]) => (
+                      <Card key={label} className="p-4">
+                        <div className="flex items-center gap-2 text-xs text-slate-500"><Badge tone={tone}><Icon name={ic} className="w-3.5 h-3.5" /></Badge>{label}</div>
+                        <p className="mt-2 text-2xl font-bold tracking-tight tabular-nums text-slate-900 dark:text-white">{valor}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{sub}</p>
+                      </Card>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+                    {/* Gráfico de horas por dia */}
+                    <Card className="xl:col-span-3 p-5">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="font-semibold text-sm text-slate-900 dark:text-white">Horas em corda por dia</h3>
+                          <p className="text-xs text-slate-500">Soma de todos os colaboradores · FO-45</p>
+                        </div>
+                        <button onClick={() => setActiveTab('fo45')} className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">Ver logbook →</button>
+                      </div>
+                      <div className="flex items-end gap-[3px] h-40">
+                        {s.horasDia.map((h, i) => (
+                          <div key={i} className="flex-1 h-full flex flex-col justify-end group relative" title={`${fmtData(s.datas[i])}: ${h}h`}>
+                            <div className={`w-full rounded-t-[3px] transition-all ${h === 0 ? 'bg-slate-100 dark:bg-slate-800' : 'bg-brand-500 group-hover:bg-brand-600 dark:bg-brand-400'}`} style={{ height: h === 0 ? '2px' : `${(h / maxDia) * 100}%` }}></div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-[3px] mt-1.5 text-[10px] text-slate-400 tabular-nums">
+                        {s.datas.map((iso, i) => <span key={iso} className="flex-1 text-center whitespace-nowrap">{i % Math.max(1, Math.ceil(s.datas.length / 8)) === 0 ? fmtData(iso).slice(0, 5) : ''}</span>)}
+                      </div>
+                    </Card>
+
+                    {/* Média por critério comportamental */}
+                    <Card className="xl:col-span-2 p-5">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="font-semibold text-sm text-slate-900 dark:text-white">Perfil comportamental</h3>
+                          <p className="text-xs text-slate-500">Média por critério · FO-41</p>
+                        </div>
+                        <button onClick={() => setActiveTab('fo41')} className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">Ver avaliações →</button>
+                      </div>
+                      {s.avs.length === 0 ? <EmptyState icon="award" title="Sem avaliações" /> : (
+                        <div className="space-y-2">
+                          {CRITERIOS_FO41.map((cr, i) => {
+                            const v = s.mediaCriterios[i];
+                            return (
+                              <div key={cr} className="flex items-center gap-2 text-xs">
+                                <span className="w-40 shrink-0 truncate text-slate-500" title={cr}>{cr}</span>
+                                <div className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden"><div className={`h-full rounded-full ${v >= 8 ? 'bg-indigo-500' : v >= 6 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: (v * 10) + '%' }}></div></div>
+                                <span className="w-7 text-right font-semibold tabular-nums text-slate-700 dark:text-slate-200">{v.toFixed(1).replace('.', ',')}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </Card>
+                  </div>
+
+                  {/* Comparativo por supervisor (clique na linha para filtrar) */}
+                  <Card className="overflow-hidden">
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                      <h3 className="font-semibold text-sm text-slate-900 dark:text-white">Resumo por supervisor{filtroUnidade ? ` · ${filtroUnidade}` : ''}</h3>
+                      <span className="text-xs text-slate-400 hidden sm:inline">Clique em uma linha para filtrar</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead><tr>
+                          <th className={thCls}>Supervisor</th><th className={thCls + " text-right"}>Horas</th><th className={thCls + " text-right"}>Checklists</th>
+                          <th className={thCls + " text-right"}>Conformidade</th><th className={thCls + " text-right"}>Avaliações</th><th className={thCls + " text-right"}>Média</th>
+                        </tr></thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {supervisoresN3List.map(sup => {
+                            const st = statsSupervisor(sup.nome);
+                            const ativo = filtroDashboardSupervisor === sup.nome;
+                            return (
+                              <tr key={sup.id} onClick={() => setFiltroDashboardSupervisor(ativo ? '' : sup.nome)} tabIndex={0} aria-pressed={ativo}
+                                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFiltroDashboardSupervisor(ativo ? '' : sup.nome); } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); (e.key === 'ArrowDown' ? e.currentTarget.nextElementSibling : e.currentTarget.previousElementSibling)?.focus(); } }}
+                                className={`cursor-pointer transition-colors ${ativo ? 'bg-brand-50/70 dark:bg-brand-500/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}>
+                                <td className={tdCls}>
+                                  <div className="flex items-center gap-2.5">
+                                    <Avatar nome={sup.nome} size="sm" />
+                                    <div><p className="font-semibold text-slate-900 dark:text-white">{sup.nome}</p><p className="text-[11px] font-mono text-slate-500">{sup.registro}</p></div>
+                                    {ativo && <Icon name="check" className="w-4 h-4 text-brand-600" />}
+                                  </div>
+                                </td>
+                                <td className={tdCls + " text-right font-semibold tabular-nums"}>{st.horas}h</td>
+                                <td className={tdCls + " text-right tabular-nums"}>{st.cls.length}</td>
+                                <td className={tdCls + " text-right"}>{st.conf === null ? <span className="text-slate-400">—</span> : <Badge tone={st.conf === 100 ? 'green' : 'amber'}>{st.conf}%</Badge>}</td>
+                                <td className={tdCls + " text-right tabular-nums"}>{st.avs.length}</td>
+                                <td className={tdCls + " text-right"}>{st.media === null ? <span className="text-slate-400">—</span> : <Badge tone={toneNota(st.media)}>{st.media}</Badge>}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    {/* Últimos checklists */}
+                    <Card>
+                      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                        <h3 className="font-semibold text-sm text-slate-900 dark:text-white">Checklists diários · CL-01</h3>
+                        <button onClick={() => setActiveTab('cl01')} className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">Ver todos →</button>
+                      </div>
+                      {s.cls.length === 0 ? <EmptyState icon="clipboard-check" title="Sem checklists" /> : (
+                        <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {[...s.cls].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 6).map(c => {
+                            const cf = conformidadeCL(c);
+                            return (
+                              <li key={c.id} className="px-5 py-3 flex items-center gap-3 text-sm">
+                                <span className="text-xs text-slate-500 tabular-nums w-20 shrink-0">{c.data}</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-slate-900 dark:text-white truncate">{c.escalador} <span className="font-mono text-xs font-normal text-slate-500">· {c.ptNum}</span></p>
+                                  <p className="text-xs text-slate-500 truncate"><span className="font-semibold text-brand-600 dark:text-brand-400">{c.unidade}</span> · {c.atividade}{!filtroDashboardSupervisor ? ` · Sup. ${c.supervisorN3}` : ''}</p>
+                                </div>
+                                <Badge tone={cf.pct === 100 ? 'green' : 'amber'} dot>{cf.ok}/{cf.total}</Badge>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </Card>
+
+                    {/* Horas por colaborador */}
+                    <Card>
+                      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                        <h3 className="font-semibold text-sm text-slate-900 dark:text-white">Controle de horas por colaborador · FO-45</h3>
+                        <button onClick={() => setActiveTab('fo45')} className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">Ver todos →</button>
+                      </div>
+                      {s.lbs.length === 0 ? <EmptyState icon="clock" title="Sem lançamentos" /> : (
+                        <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {s.lbs.map(lb => {
+                            const maxLb = Math.max(...s.lbs.map(horasLogbook), 1);
+                            return (
+                              <li key={lb.id} className="px-5 py-3 flex items-center gap-3 text-sm">
+                                <Avatar nome={lb.colaborador} size="sm" />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="font-semibold text-slate-900 dark:text-white truncate">{lb.colaborador} <span className="text-xs font-normal text-slate-500">· {lb.nivel}</span></p>
+                                    <span className="font-bold tabular-nums text-brand-600 dark:text-brand-400" title="Com acesso / sem acesso">{horasLogbook(lb)}h <span className="font-medium text-slate-400">+ {horasSemLogbook(lb)}h</span></span>
+                                  </div>
+                                  <div className="mt-1.5 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden"><div className="h-full rounded-full bg-brand-500" style={{ width: (horasLogbook(lb) / maxLb * 100) + '%' }}></div></div>
+                                  <p className="text-[11px] text-slate-500 mt-1"><span className="font-semibold text-brand-600 dark:text-brand-400">{lb.unidade}</span> · Embarque {fmtPeriodo(lb)} · {diasLogbook(lb)} dia{diasLogbook(lb) === 1 ? '' : 's'} trabalhado{diasLogbook(lb) === 1 ? '' : 's'}{!filtroDashboardSupervisor ? ` · Sup. ${lb.supervisorN3}` : ''}</p>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </Card>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ABA INVENTÁRIO */}
+            {!isGestor && activeTab === 'inv' && (
+              <Card className="overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr><th className={thCls}>TAG</th><th className={thCls}>Equipamento</th><th className={thCls}>Fabricante</th><th className={thCls}>Status</th></tr></thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {equipamentos.map(eq => (
+                        <tr key={eq.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                          <td className={tdCls + " font-mono text-xs font-semibold text-slate-700 dark:text-slate-200"}>{eq.tag}</td>
+                          <td className={tdCls + " font-semibold text-slate-900 dark:text-white"}>{eq.equipamento}</td>
+                          <td className={tdCls + " text-slate-500"}>{eq.fabricante}</td>
+                          <td className={tdCls}><Badge tone={eq.status === 'QUARENTENA' ? 'rose' : eq.status === 'CONDENADO' ? 'slate' : 'green'} dot>{eq.status}</Badge></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )}
+
+            </div>
+
+            {/* MODAIS */}
+            {showModalInv && (
+              <Modal title="Adicionar novo equipamento" subtitle="Cadastre uma TAG no inventário." icon="wrench" onClose={() => setShowModalInv(false)}>
+                <form onSubmit={submitInv} className="space-y-4">
+                  <Field label="Nome do equipamento"><input required type="text" placeholder="Ex: Croll" value={novoEquipamento.equipamento} onChange={e=>setNovoEquipamento({...novoEquipamento, equipamento:e.target.value})} className={inputCls} /></Field>
+                  <Field label="Fabricante"><input required type="text" placeholder="Ex: Petzl" value={novoEquipamento.fabricante} onChange={e=>setNovoEquipamento({...novoEquipamento, fabricante:e.target.value})} className={inputCls} /></Field>
+                  <Field label="TAG interno"><input required type="text" placeholder="Ex: AASJ-EQU-103" value={novoEquipamento.tag} onChange={e=>setNovoEquipamento({...novoEquipamento, tag:e.target.value})} className={inputCls + " font-mono"} /></Field>
+                  <ModalActions onCancel={() => setShowModalInv(false)} submitLabel="Salvar" />
+                </form>
+              </Modal>
+            )}
+
+            {showModalFO45 && (
+              <Modal title={editFO45Id ? 'Editar colaborador e embarque' : 'Vincular colaborador ao logbook'} subtitle={editFO45Id ? 'As horas já lançadas são mantidas.' : 'Informe o profissional e o período de embarque.'} icon={editFO45Id ? 'pencil' : 'user-plus'} onClose={() => setShowModalFO45(false)}>
+                <form onSubmit={submitFO45Pessoa} className="space-y-4">
+                  <Field label="Profissional">
+                    <select required value={pessoaSelecionadaFO45} onChange={e=>setPessoaSelecionadaFO45(e.target.value)} className={inputCls}>
+                      <option value="">Selecione o profissional...</option>{colaboradores.filter(c=>c.nivel!=='N3').map(c=><option key={c.id} value={c.nome}>{c.nome} ({c.nivel})</option>)}
+                    </select>
+                  </Field>
+                  {renderLinkNovoColab(nome => setPessoaSelecionadaFO45(nome))}
+                  <Field label="Unidade">
+                    <select required value={unidadeFO45} onChange={e=>setUnidadeFO45(e.target.value)} className={inputCls}>
+                      {unidades.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </Field>
+                  <div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Embarque"><input required type="date" value={embarqueFO45.inicio} onChange={e => { setEmbarqueFO45({ ...embarqueFO45, inicio: e.target.value }); setErroFO45(''); }} className={inputCls} /></Field>
+                      <Field label="Desembarque"><input required type="date" min={embarqueFO45.inicio} value={embarqueFO45.fim} onChange={e => { setEmbarqueFO45({ ...embarqueFO45, fim: e.target.value }); setErroFO45(''); }} className={inputCls} /></Field>
+                    </div>
+                    {embarqueFO45.inicio && embarqueFO45.fim && embarqueFO45.fim >= embarqueFO45.inicio && (
+                      <p className="text-xs text-slate-500 mt-1.5 inline-flex items-center gap-1"><Icon name="ship" className="w-3.5 h-3.5" />{diasPeriodo(embarqueFO45.inicio, embarqueFO45.fim)} dias a bordo</p>
+                    )}
+                    {erroFO45 && <p className="text-xs text-red-600 mt-1.5">{erroFO45}</p>}
+                  </div>
+                  <ModalActions onCancel={() => setShowModalFO45(false)} submitLabel={editFO45Id ? 'Salvar' : 'Vincular'} />
+                </form>
+              </Modal>
+            )}
+
+            {showModalFO48 && (
+              <Modal title="Registro de entrega de kit" subtitle="FO-48 · Custódia de EPIs" icon="box" onClose={() => setShowModalFO48(false)}>
+                <form onSubmit={submitFO48} className="space-y-4">
+                  <Field label="Nº do kit"><input required type="text" placeholder="Ex: 10" value={novaEntrega.kit} onChange={e=>setNovaEntrega({...novaEntrega, kit:e.target.value})} className={inputCls} /></Field>
+                  <Field label="Colaborador">
+                    <select required value={novaEntrega.usuario} onChange={e=>setNovaEntrega({...novaEntrega, usuario:e.target.value})} className={inputCls}>
+                      <option value="">Selecione...</option>{nomesColab(colaboradores.filter(c=>c.nivel!=='N3'))}
+                    </select>
+                  </Field>
+                  {renderLinkNovoColab(nome => setNovaEntrega(prev => ({ ...prev, usuario: nome })))}
+                  <ModalActions onCancel={() => setShowModalFO48(false)} submitLabel="Registrar" />
+                </form>
+              </Modal>
+            )}
+
+            {showModalCL01 && (
+              <Modal title={editCL01Id ? 'Editar checklist' : 'Checklist & liberação de PT'} subtitle="CL-01 · Verificação diária" icon={editCL01Id ? 'pencil' : 'clipboard-check'} size="md" onClose={() => setShowModalCL01(false)}>
+                <form onSubmit={submitCL01} className="space-y-4">
+                  <Field label="Unidade">
+                    <select required value={novoCL01.unidade || ''} onChange={e=>setNovoCL01({...novoCL01, unidade:e.target.value})} className={inputCls}>
+                      {unidades.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </Field>
+                  <div className="grid grid-cols-3 gap-3">
+                    <Field label="Data"><input required type="date" value={novoCL01.data} onChange={e=>setNovoCL01({...novoCL01, data:e.target.value})} className={inputCls}/></Field>
+                    <Field label="Nº da PT"><input required type="text" placeholder="PT-89412" value={novoCL01.ptNum} onChange={e=>setNovoCL01({...novoCL01, ptNum:e.target.value})} className={inputCls + " font-mono"}/></Field>
+                    <Field label="Nº da APR"><input required type="text" placeholder="APR-04" value={novoCL01.aprNum} onChange={e=>setNovoCL01({...novoCL01, aprNum:e.target.value})} className={inputCls + " font-mono"}/></Field>
+                  </div>
+                  <Field label="Escalador">
+                    <select required value={novoCL01.escalador} onChange={e=>setNovoCL01({...novoCL01, escalador:e.target.value})} className={inputCls}>
+                      <option value="">Selecione...</option>{nomesColab(colaboradores)}
+                    </select>
+                  </Field>
+                  {renderLinkNovoColab(nome => setNovoCL01(prev => ({ ...prev, escalador: nome })), true)}
+                  <Field label="Rescatista N2/N3 designado">
+                    <select required value={novoCL01.rescatista} onChange={e=>setNovoCL01({...novoCL01, rescatista:e.target.value})} className={inputCls}>
+                      <option value="">Selecione o rescatista...</option>{supervisoresN3List.map(s=><option key={s.id} value={s.nome}>{s.nome}</option>)}
+                    </select>
+                  </Field>
+                  <div className="grid grid-cols-3 gap-3">
+                    <Field label="Nº do kit"><input required type="text" placeholder="Ex: 10" value={novoCL01.kit} onChange={e=>setNovoCL01({...novoCL01, kit:e.target.value})} className={inputCls} /></Field>
+                    <div className="col-span-2"><Field label="Atividade executada"><input required type="text" placeholder="Ex: Pintura de paiol" value={novoCL01.atividade} onChange={e=>setNovoCL01({...novoCL01, atividade:e.target.value})} className={inputCls} /></Field></div>
+                  </div>
+                  <div>
+                    <span className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Verificações ({ITENS_CHECKLIST.filter(([k]) => novoCL01.itens?.[k]).length}/{ITENS_CHECKLIST.length})</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {ITENS_CHECKLIST.map(([k, label]) => {
+                        const ok = !!novoCL01.itens?.[k];
+                        return (
+                          <label key={k} className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border cursor-pointer text-sm transition ${ok ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-200' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                            <input type="checkbox" checked={ok} onChange={e => setNovoCL01({ ...novoCL01, itens: { ...novoCL01.itens, [k]: e.target.checked } })} className="w-4 h-4 rounded accent-green-600" />
+                            {label}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <Field label="Observações (opcional)">
+                    <textarea placeholder="Pendências, condições da área, ocorrências..." value={novoCL01.observacoes || ''} onChange={e=>setNovoCL01({...novoCL01, observacoes:e.target.value})} className={textareaCls.replace('min-h-[110px]', 'min-h-[70px]')}></textarea>
+                  </Field>
+                  <ModalActions onCancel={() => setShowModalCL01(false)} submitLabel={editCL01Id ? 'Salvar alterações' : 'Salvar checklist'} />
+                </form>
+              </Modal>
+            )}
+
+            {showModalRL32 && (
+              <Modal title="Reportar dano e isolar" subtitle="O equipamento entra em quarentena e o gestor é notificado." icon="alert-triangle" tone="rose" size="md" onClose={() => setShowModalRL32(false)}>
+                <form onSubmit={submitRL32} className="space-y-4">
+                  <Field label="Equipamento afetado">
+                    <select required value={novoDano.equipamentoTag} onChange={e=>setNovoDano({...novoDano, equipamentoTag:e.target.value})} className={inputCls + " font-mono"}>
+                      <option value="">Selecione a TAG...</option>{equipamentos.filter(eq => eq.status === 'Operacional').map(eq=><option key={eq.id} value={eq.tag}>{eq.tag} - {eq.equipamento}{eq.kit ? ` (kit ${eq.kit})` : ''}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Descrição da falha">
+                    <textarea required placeholder="Descreva detalhadamente a falha ou desgaste..." value={novoDano.falha} onChange={e=>setNovoDano({...novoDano, falha:e.target.value})} className={textareaCls.replace('min-h-[110px]', 'min-h-[80px]')}></textarea>
+                  </Field>
+                  <div>
+                    <span className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">O que você precisa?</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {Object.entries(ACOES_DANO).map(([k, label]) => (
+                        <label key={k} className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer text-sm transition ${novoDano.acao === k ? 'border-brand-500 bg-brand-50 text-brand-800 dark:bg-brand-500/10 dark:text-brand-200' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                          <input type="radio" name="acao" checked={novoDano.acao === k} onChange={() => setNovoDano({ ...novoDano, acao: k })} className="accent-brand-600" />{label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Urgência</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {Object.entries(URGENCIAS).map(([k, [label, tone, dica]]) => {
+                        const ativo = novoDano.urgencia === k;
+                        const cor = { rose: 'border-red-500 bg-red-50 text-red-800 dark:bg-red-500/10 dark:text-red-200', amber: 'border-amber-500 bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200', slate: 'border-slate-500 bg-slate-50 text-slate-800 dark:bg-slate-800 dark:text-slate-100' }[tone];
+                        return (
+                          <label key={k} className={`px-3 py-2.5 rounded-xl border cursor-pointer transition ${ativo ? cor : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                            <span className="flex items-center gap-2 text-sm font-semibold"><input type="radio" name="urgencia" checked={ativo} onChange={() => setNovoDano({ ...novoDano, urgencia: k })} className="accent-red-600" />{label}</span>
+                            <span className="block text-[11px] opacity-75 mt-0.5 pl-5">{dica}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Foto da avaria <span className="font-normal text-slate-400">(opcional)</span></span>
+                    {novoDano.foto ? (
+                      <div className="flex items-center gap-3">
+                        <img src={novoDano.foto} alt="Prévia da foto" className="w-20 h-20 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-700" />
+                        <Btn type="button" size="sm" variant="ghost" icon="x" onClick={() => setNovoDano({ ...novoDano, foto: '' })}>Remover foto</Btn>
+                      </div>
+                    ) : (
+                      <label className="flex items-center justify-center gap-2 h-20 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 text-sm text-slate-500 cursor-pointer hover:border-brand-400 hover:text-brand-600 transition">
+                        <Icon name="camera" className="w-5 h-5" />Tirar ou anexar foto
+                        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={async e => { const f = e.target.files?.[0]; if (f) { const foto = await lerFotoReduzida(f); setNovoDano(prev => ({ ...prev, foto })); } }} />
+                      </label>
+                    )}
+                  </div>
+                  <ModalActions onCancel={() => setShowModalRL32(false)} submitLabel="Reportar e isolar" variant="danger" />
+                </form>
+              </Modal>
+            )}
+
+            {showModalFO41 && (
+              <Modal title={editFO41Id ? 'Editar avaliação comportamental' : 'Nova avaliação comportamental'} subtitle="FO-41 · Notas de 0 a 10 por critério" icon={editFO41Id ? 'pencil' : 'award'} tone="violet" size="md" onClose={() => setShowModalFO41(false)}>
+                <form onSubmit={submitFO41} className="space-y-4">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-2">
+                      <Field label="Colaborador">
+                        <select required value={novaAvaliacao.colaborador} onChange={e=>setNovaAvaliacao({...novaAvaliacao, colaborador:e.target.value})} className={inputCls}>
+                          <option value="">Selecione...</option>{nomesColab(colaboradores.filter(c=>c.nivel!=='N3'))}
+                        </select>
+                      </Field>
+                      {renderLinkNovoColab(nome => setNovaAvaliacao(prev => ({ ...prev, colaborador: nome })))}
+                    </div>
+                    <Field label="Data"><input required type="date" value={novaAvaliacao.data || ''} onChange={e=>setNovaAvaliacao({...novaAvaliacao, data:e.target.value})} className={inputCls}/></Field>
+                  </div>
+                  <Field label="Unidade">
+                    <select required value={novaAvaliacao.unidade || ''} onChange={e=>setNovaAvaliacao({...novaAvaliacao, unidade:e.target.value})} className={inputCls}>
+                      {unidades.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </Field>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Critérios</span>
+                      <Badge tone={toneNota(somaNotas(novaAvaliacao.notas))}>Total {somaNotas(novaAvaliacao.notas)}/100</Badge>
+                    </div>
+                    <div className="space-y-1.5 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                      {CRITERIOS_FO41.map((cr, i) => (
+                        <div key={cr} className="flex items-center gap-3">
+                          <span className="flex-1 text-sm text-slate-700 dark:text-slate-200 truncate" title={cr}>{cr}</span>
+                          <input type="range" min="0" max="10" step="1" value={novaAvaliacao.notas[i]} onChange={e => setNota(i, Number(e.target.value))} className="w-28 sm:w-36 accent-indigo-600" aria-label={cr} />
+                          <input type="number" min="0" max="10" value={novaAvaliacao.notas[i]} onChange={e => setNota(i, e.target.value === '' ? 0 : Math.max(0, Math.min(10, Number(e.target.value))))} className="w-12 h-8 text-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold tabular-nums focus:outline-none focus:border-indigo-500" aria-label={`Nota ${cr}`} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <Field label="Anotações">
+                    <textarea required placeholder="Anotações técnicas de segurança e comportamento..." value={novaAvaliacao.anotacoes} onChange={e=>setNovaAvaliacao({...novaAvaliacao, anotacoes:e.target.value})} className={textareaCls.replace('min-h-[110px]', 'min-h-[80px]')}></textarea>
+                  </Field>
+                  <ModalActions onCancel={() => setShowModalFO41(false)} submitLabel={editFO41Id ? 'Salvar alterações' : 'Salvar avaliação'} variant="purple" />
+                </form>
+              </Modal>
+            )}
+
+            {/* Decisão do gestor sobre um caso de dano */}
+            {decisao && (() => {
+              const d = danosReports.find(x => x.id === decisao.danoId);
+              if (!d) return null;
+              const opcoes = [
+                ['troca', 'repeat', 'Aprovar troca', 'Envia um substituto; o danificado é baixado ao receber'],
+                ['inspecao', 'search-check', 'Enviar p/ inspeção', 'Segue em quarentena até o resultado'],
+                ['condenar', 'ban', 'Condenar', 'Sai do inventário, sem reposição'],
+                ['recusar', 'undo-2', 'Recusar e liberar', 'Volta a operar; exige justificativa'],
+              ].filter(([k]) => !(d.etapa === 'inspecao' && (k === 'inspecao' || k === 'recusar')));
+              const set = (patch) => { setErroDecisao(''); setDecisao({ ...decisao, ...patch }); };
+              return (
+                <Modal title={`Decidir · ${d.equipamentoTag}`} subtitle={`${d.equipamento || ''} — pedido de ${d.supervisorN3}: ${(ACOES_DANO[d.acao] || '').toLowerCase()}, ${URGENCIAS[d.urgencia]?.[0].toLowerCase()}`} icon="gavel" size="md" onClose={() => setDecisao(null)}>
+                  <form onSubmit={salvarDecisao} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {opcoes.map(([k, ic, label, dica]) => (
+                        <label key={k} className={`px-3 py-2.5 rounded-xl border cursor-pointer transition ${decisao.tipo === k ? (k === 'condenar' || k === 'recusar' ? 'border-red-500 bg-red-50 dark:bg-red-500/10' : 'border-brand-500 bg-brand-50 dark:bg-brand-500/10') : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                          <span className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100"><input type="radio" name="decisao" checked={decisao.tipo === k} onChange={() => set({ tipo: k })} className="accent-brand-600" /><Icon name={ic} className="w-4 h-4" />{label}</span>
+                          <span className="block text-[11px] text-slate-500 mt-0.5 pl-5">{dica}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {decisao.tipo === 'troca' && (
+                      <div className="space-y-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 p-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <Field label="Equipamento substituto"><input value={decisao.equipamento} onChange={e => set({ equipamento: e.target.value })} className={inputCls} /></Field>
+                          <Field label="Fabricante"><input value={decisao.fabricante} onChange={e => set({ fabricante: e.target.value })} className={inputCls} /></Field>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Field label="TAG do substituto"><input required placeholder="AASJ-EQU-110" value={decisao.tag} onChange={e => set({ tag: e.target.value })} className={inputCls + " font-mono uppercase placeholder:normal-case"} /></Field>
+                          <Field label="Previsão de chegada"><input placeholder="Ex: próximo voo, 14/03" value={decisao.previsao} onChange={e => set({ previsao: e.target.value })} className={inputCls} /></Field>
+                        </div>
+                      </div>
+                    )}
+                    <Field label={decisao.tipo === 'recusar' ? 'Justificativa (obrigatória)' : 'Observação para o supervisor (opcional)'}>
+                      <textarea value={decisao.obs} onChange={e => set({ obs: e.target.value })} placeholder={decisao.tipo === 'recusar' ? 'Ex: desgaste dentro do limite do fabricante' : 'Ex: substituto sai no voo das 7h'} className={textareaCls.replace('min-h-[110px]', 'min-h-[70px]')}></textarea>
+                    </Field>
+                    {erroDecisao && <p className="text-xs text-red-600 flex items-center gap-1.5"><Icon name="alert-circle" className="w-3.5 h-3.5" />{erroDecisao}</p>}
+                    <ModalActions onCancel={() => setDecisao(null)} submitLabel={{ troca: 'Aprovar troca', inspecao: 'Enviar para inspeção', condenar: 'Condenar equipamento', recusar: 'Recusar e liberar' }[decisao.tipo]} variant={decisao.tipo === 'condenar' || decisao.tipo === 'recusar' ? 'danger' : 'primary'} />
+                  </form>
+                </Modal>
+              );
+            })()}
+
+            {/* Ajuda: atalhos de teclado */}
+            {ajudaTeclado && (
+              <Modal title="Atalhos de teclado" subtitle="Navegue pelo app sem usar o mouse." icon="keyboard" onClose={() => setAjudaTeclado(false)}>
+                <div className="space-y-4 text-sm">
+                  {[
+                    ['Geral', [[['Alt', '1–' + secoes.length], 'Ir para a seção do menu'], [['?'], 'Abrir/fechar esta ajuda'], [['/'], 'Ir para a busca'], [['N'], 'Abrir/fechar notificações'], [['Esc'], 'Fechar janela, notificações ou menu'], [['Tab'], 'Próximo campo ou botão']]],
+                    ['Menu e abas', [[['↑', '↓'], 'Mover entre os itens do menu'], [['←', '→'], 'Trocar a aba interna da seção'], [['Enter'], 'Abrir o item em foco']]],
+                    ['Grade de horas (FO-45)', [[['←', '→'], 'Dia anterior / próximo'], [['↑', '↓'], 'Com acesso / sem acesso / próximo colaborador'], [['Enter'], 'Confirmar e descer'], [['Shift', 'Enter'], 'Confirmar e subir']]],
+                    ['Formulários', [[['Enter'], 'Salvar'], [['Esc'], 'Cancelar']]],
+                  ].map(([grupo, itens]) => (
+                    <div key={grupo}>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">{grupo}</p>
+                      <ul className="space-y-1.5">
+                        {itens.map(([teclas, desc]) => (
+                          <li key={desc} className="flex items-center justify-between gap-3">
+                            <span className="text-slate-600 dark:text-slate-300">{desc}</span>
+                            <span className="flex gap-1 shrink-0">{teclas.map(k => <kbd key={k} className="min-w-[26px] h-6 px-1.5 grid place-items-center rounded-md border border-slate-200 dark:border-slate-700 border-b-2 bg-slate-50 dark:bg-slate-800 text-xs font-mono font-semibold text-slate-700 dark:text-slate-200">{k}</kbd>)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </Modal>
+            )}
+
+            {/* Foto ampliada */}
+            {fotoAmpliada && (
+              <div className="fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm grid place-items-center p-4 anim-fade" onClick={() => setFotoAmpliada('')}>
+                <img src={fotoAmpliada} alt="Foto da avaria" className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl anim-pop" />
+              </div>
+            )}
+
+            {/* Fica por cima do formulário que o abriu */}
+            {modalColab && (
+              <Modal title="Cadastrar novo colaborador" subtitle="Ele passa a aparecer em todos os formulários." icon="user-plus" onClose={() => setModalColab(null)}>
+                <form onSubmit={salvarNovoColab} className="space-y-4">
+                  <Field label="Nome completo"><input required autoFocus type="text" placeholder="Ex: Carlos Silva" value={novoColab.nome} onChange={e => { setNovoColab({ ...novoColab, nome: e.target.value }); setErroColab(''); }} className={inputCls} /></Field>
+                  <div className="grid grid-cols-3 gap-3">
+                    <Field label="Nível IRATA">
+                      <select value={novoColab.nivel} onChange={e => setNovoColab({ ...novoColab, nivel: e.target.value })} className={inputCls}>
+                        {(modalColab.permitirN3 ? ['N1', 'N2', 'N3'] : ['N1', 'N2']).map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </Field>
+                    <div className="col-span-2"><Field label="Função"><input type="text" placeholder="Ex: Pintor Escadista" value={novoColab.funcao} onChange={e => setNovoColab({ ...novoColab, funcao: e.target.value })} className={inputCls} /></Field></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Registro IRATA"><input required type="text" placeholder="IRATA-XXXXX" value={novoColab.registro} onChange={e => { setNovoColab({ ...novoColab, registro: e.target.value }); setErroColab(''); }} className={inputCls + " font-mono uppercase placeholder:normal-case"} /></Field>
+                    <Field label="Validade da certificação"><input type="date" value={novoColab.validadeIrata} onChange={e => setNovoColab({ ...novoColab, validadeIrata: e.target.value })} className={inputCls} /></Field>
+                  </div>
+                  {erroColab && <p className="text-xs text-red-600 flex items-center gap-1.5"><Icon name="alert-circle" className="w-3.5 h-3.5" />{erroColab}</p>}
+                  <ModalActions onCancel={() => setModalColab(null)} submitLabel="Cadastrar e selecionar" />
+                </form>
+              </Modal>
+            )}
+
+          </main>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

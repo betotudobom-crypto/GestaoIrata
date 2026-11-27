@@ -1756,8 +1756,21 @@
                   <Card className="overflow-hidden">
                     {lista.length === 0 ? (
                       <EmptyState icon="package" title="Nenhuma TAG nesta unidade" text="Use o botão Adicionar TAG para cadastrar o primeiro equipamento." />
-                    ) : (
-                      <div className="overflow-x-auto">
+                    ) : (<>
+                      {/* Celular: um cartão por TAG, com status visível sem rolar */}
+                      <ul className="sm:hidden divide-y divide-slate-100 dark:divide-slate-800">
+                        {lista.map(eq => (
+                          <li key={eq.id} className="p-4 flex items-start gap-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm text-slate-900 dark:text-white">{eq.equipamento} <span className="font-normal text-slate-500">· {eq.fabricante}</span></p>
+                              <p className="font-mono text-xs font-semibold text-slate-700 dark:text-slate-200 mt-1">{eq.tag}</p>
+                              <p className="text-xs text-slate-500 mt-1">{eq.unidade || 'Sem unidade'}{eq.kit ? ` · Kit ${eq.kit}` : ''}</p>
+                            </div>
+                            <Badge tone={eq.status === 'QUARENTENA' ? 'rose' : eq.status === 'CONDENADO' ? 'slate' : 'green'} dot>{eq.status}</Badge>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="hidden sm:block overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead><tr><th className={thCls}>TAG</th><th className={thCls}>Equipamento</th><th className={thCls}>Fabricante</th><th className={thCls}>Unidade</th><th className={thCls}>Kit</th><th className={thCls}>Status</th></tr></thead>
                           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1774,7 +1787,7 @@
                           </tbody>
                         </table>
                       </div>
-                    )}
+                    </>)}
                   </Card>
                 </div>
               );

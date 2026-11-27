@@ -333,11 +333,16 @@
       const supervisoresN3List = usuariosCadastrados.filter(u => u.perfil === 'SUPERVISOR' && u.status === 'APROVADO');
 
       const [equipamentos, setEquipamentos] = useState([
-        { id: 1, equipamento: 'Croll', fabricante: 'Petzl', tag: 'AASJ-EQU-101', kit: '10', status: 'Operacional' },
-        { id: 2, equipamento: 'Ascender Basic', fabricante: 'Petzl', tag: 'AASJ-EQU-102', kit: '10', status: 'Operacional' }
+        { id: 1, equipamento: 'Croll', fabricante: 'Petzl', tag: 'AASJ-EQU-101', kit: '10', status: 'Operacional', unidade: 'POLVO A' },
+        { id: 2, equipamento: 'Ascender Basic', fabricante: 'Petzl', tag: 'AASJ-EQU-102', kit: '10', status: 'Operacional', unidade: 'POLVO A' },
+        { id: 3, equipamento: 'Rig', fabricante: 'Petzl', tag: 'AASJ-EQU-201', kit: '12', status: 'Operacional', unidade: 'BRAVO' },
+        { id: 4, equipamento: 'ASAP Lock', fabricante: 'Petzl', tag: 'AASJ-EQU-202', kit: '12', status: 'Operacional', unidade: 'BRAVO' },
+        { id: 5, equipamento: 'Avao Bod Fast', fabricante: 'Petzl', tag: 'AASJ-EQU-301', kit: '15', status: 'Operacional', unidade: 'P-50' }
       ]);
       const [showModalInv, setShowModalInv] = useState(false);
-      const [novoEquipamento, setNovoEquipamento] = useState({ equipamento: '', fabricante: '', tag: '', kit: '', status: 'Operacional' });
+      const novoEquipamentoVazio = () => ({ equipamento: '', fabricante: '', tag: '', kit: '', status: 'Operacional', unidade: unidadePadrao() });
+      const [novoEquipamento, setNovoEquipamento] = useState(novoEquipamentoVazio);
+      const [erroInv, setErroInv] = useState('');
 
       const [entregas, setEntregas] = useState([{ id: 1, supervisorN3: 'Herbert Aquino', kit: '10', usuario: 'Igor das Neves', condRetirada: 'BOM', dataRetirada: '2026-03-01' }]);
       const [showModalFO48, setShowModalFO48] = useState(false);
@@ -452,6 +457,7 @@
 
       /* Unidades: cadastro e remoção pelo gestor */
       const docsDaUnidade = (u) => [...logbooks, ...checklistsKits, ...avaliacoes].filter(d => d.unidade === u).length;
+      const tagsDaUnidade = (u) => equipamentos.filter(eq => eq.unidade === u).length;
       const adicionarUnidade = (e) => {
         e.preventDefault();
         const nome = novaUnidade.trim().toUpperCase().replace(/\s+/g, ' ');
@@ -460,7 +466,7 @@
         setUnidades([...unidades, nome]); setNovaUnidade(''); setErroUnidade('');
       };
       const removerUnidade = (u) => {
-        if (docsDaUnidade(u) > 0) return;
+        if (docsDaUnidade(u) > 0 || tagsDaUnidade(u) > 0) return;
         if (!confirmar(`Remover a unidade ${u}?`)) return;
         setUnidades(unidades.filter(x => x !== u));
         if (filtroUnidade === u) setFiltroUnidade('');
@@ -484,7 +490,13 @@
         }));
       };
 
-      const submitInv = (e) => { e.preventDefault(); setEquipamentos([...equipamentos, { id: Date.now(), ...novoEquipamento }]); setShowModalInv(false); setNovoEquipamento({equipamento:'', fabricante:'', tag:'', kit:'', status:'Operacional'}); };
+      const abrirNovoInv = () => { setNovoEquipamento({ ...novoEquipamentoVazio(), unidade: filtroUnidade || unidadePadrao() }); setErroInv(''); setShowModalInv(true); };
+      const submitInv = (e) => {
+        e.preventDefault();
+        const tag = novoEquipamento.tag.trim().toUpperCase();
+        if (equipamentos.some(eq => eq.tag.toUpperCase() === tag)) { setErroInv(`A TAG ${tag} já existe no inventário.`); return; }
+        setEquipamentos([...equipamentos, { id: Date.now(), ...novoEquipamento, tag }]); setShowModalInv(false); setNovoEquipamento(novoEquipamentoVazio()); setErroInv('');
+      };
       const submitFO48 = (e) => { e.preventDefault(); setEntregas([...entregas, { id: Date.now(), supervisorN3: usuarioLogado.nome, ...novaEntrega }]); setShowModalFO48(false); };
       /* CL-01: criar, editar e excluir */
       const abrirNovoCL01 = () => { setEditCL01Id(null); setNovoCL01(novoCL01Vazio()); setShowModalCL01(true); };
@@ -627,7 +639,7 @@
       const confirmarRecebimento = (d) => {
         const s = d.substituto;
         setEquipamentos(prev => [...prev.map(eq => eq.tag === d.equipamentoTag ? { ...eq, status: 'CONDENADO' } : eq),
-          { id: Date.now(), equipamento: s.equipamento, fabricante: s.fabricante, tag: s.tag, kit: d.kit || '', status: 'Operacional' }]);
+          { id: Date.now(), equipamento: s.equipamento, fabricante: s.fabricante, tag: s.tag, kit: d.kit || '', status: 'Operacional', unidade: (prev.find(eq => eq.tag === d.equipamentoTag) || {}).unidade || unidadePadrao() }]);
         atualizarDano(d.id, { etapa: 'encerrado', resultado: 'Substituído', status: 'Substituído', recebidoEm: agoraISO(), encerradoEm: agoraISO() }, 'Substituto recebido', `${s.tag} incluído no kit ${d.kit || '—'}; ${d.equipamentoTag} baixado como condenado`);
         marcarNotifsDanoLidas(d.id, usuarioLogado.nome);
         notificar('GESTOR', { tipo: 'ciente', danoId: d.id, titulo: `Troca concluída · ${d.equipamentoTag}`, texto: `${usuarioLogado.nome} confirmou o recebimento de ${s.equipamento} ${s.tag}. Caso encerrado.` });
@@ -755,7 +767,7 @@
       const secoes = isGestor ? [
         { id: 'painel', icon: 'layout-dashboard', label: 'Painel', tabs: ['painel'] },
         { id: 'documentos', icon: 'folder-open', label: 'Documentos N3', tabs: ['fo45', 'cl01', 'fo41'] },
-        { id: 'equipamentos', icon: 'shield-alert', label: 'Equipamentos', tabs: ['auditoria', 'quarentena'], count: danosReports.filter(d => ['reportado', 'ciente', 'troca_aprovada', 'inspecao'].includes(d.etapa)).length, tone: 'rose' },
+        { id: 'equipamentos', icon: 'shield-alert', label: 'Equipamentos', tabs: ['auditoria', 'quarentena', 'inv'], count: danosReports.filter(d => ['reportado', 'ciente', 'troca_aprovada', 'inspecao'].includes(d.etapa)).length, tone: 'rose' },
         { id: 'equipe', icon: 'users', label: 'Equipe e unidades', tabs: ['autorizacoes', 'unidades'], count: pendentes.length, tone: 'amber' },
       ] : [
         { id: 'documentos', icon: 'folder-open', label: 'Documentos N3', tabs: ['fo45', 'cl01', 'fo41'] },
@@ -790,18 +802,20 @@
         'fo48': ['Controle de Custódia de EPIs (FO-48)', 'Controle de custódia e retirada de kits de equipamentos.'],
         'rl32': ['Danos e trocas (RL-32)', 'Ao reportar, o equipamento vai para quarentena e o gestor é notificado. Acompanhe aqui até a troca chegar.'],
         'fo41': ['Avaliação Comportamental (FO-41)', 'Avaliação comportamental e de desempenho dos escaladores, em 10 critérios.'],
-        'inv': ['Inventário Geral de TAGs', 'Inventário de TAGs e controle de status operacional.'],
+        'inv': ['Inventário por unidade', 'TAGs de cada unidade e seu status operacional. Escolha uma unidade para ver só o inventário dela.'],
       };
       const tituloPagina = secaoAtual.label;
       const descPagina = (paginas[activeTab] || ['', ''])[1];
 
-      const acoes = isGestor ? {} : {
+      const acoes = isGestor ? {
+        inv: { label: 'Adicionar TAG', icon: 'plus', onClick: abrirNovoInv },
+      } : {
         fo45: { label: 'Adicionar colaborador', icon: 'user-plus', onClick: abrirNovoFO45 },
         cl01: { label: 'Novo checklist', icon: 'plus', onClick: abrirNovoCL01 },
         fo48: { label: 'Registrar retirada', icon: 'plus', onClick: () => setShowModalFO48(true) },
         rl32: { label: 'Reportar dano', icon: 'alert-triangle', variant: 'danger', onClick: () => setShowModalRL32(true) },
         fo41: { label: 'Nova avaliação', icon: 'plus', onClick: abrirNovoFO41 },
-        inv: { label: 'Adicionar TAG', icon: 'plus', onClick: () => setShowModalInv(true) },
+        inv: { label: 'Adicionar TAG', icon: 'plus', onClick: abrirNovoInv },
       };
       const acao = acoes[activeTab];
 
@@ -1235,16 +1249,16 @@
                 </form>
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                   {unidades.map(u => {
-                    const qtd = docsDaUnidade(u);
+                    const qtd = docsDaUnidade(u); const tags = tagsDaUnidade(u); const emUso = qtd + tags > 0;
                     return (
                       <li key={u} className="px-5 py-3 flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400"><Icon name="anchor" className="w-4 h-4" /></div>
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-sm text-slate-900 dark:text-white">{u}</p>
-                          <p className="text-xs text-slate-500">{qtd} documento{qtd === 1 ? '' : 's'}</p>
+                          <p className="text-xs text-slate-500">{qtd} documento{qtd === 1 ? '' : 's'} · {tags} TAG{tags === 1 ? '' : 's'} no inventário</p>
                         </div>
-                        <button type="button" onClick={() => removerUnidade(u)} disabled={qtd > 0}
-                          title={qtd > 0 ? 'Não é possível remover: há documentos nesta unidade' : 'Remover unidade'}
+                        <button type="button" onClick={() => removerUnidade(u)} disabled={emUso}
+                          title={emUso ? 'Não é possível remover: há documentos ou TAGs nesta unidade' : 'Remover unidade'}
                           className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 disabled:cursor-not-allowed">
                           <Icon name="trash-2" className="w-4 h-4" />
                         </button>
@@ -1272,7 +1286,7 @@
                           <div className="p-2.5 rounded-xl bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"><Icon name="shield-alert" className="w-5 h-5" /></div>
                           <div>
                             <p className="font-semibold text-sm text-slate-900 dark:text-white">{eq.equipamento} <span className="font-normal text-slate-500">· {eq.fabricante}</span></p>
-                            <p className="text-xs text-slate-500 font-mono mt-0.5">TAG {eq.tag} · Kit {eq.kit}</p>
+                            <p className="text-xs text-slate-500 font-mono mt-0.5">TAG {eq.tag} · Kit {eq.kit}{eq.unidade ? ` · ${eq.unidade}` : ''}</p>
                           </div>
                         </div>
                         <Btn size="sm" variant="soft" icon="unlock" onClick={() => liberarQuarentena(eq.tag)}>Liberar quarentena</Btn>
@@ -1702,26 +1716,69 @@
               );
             })()}
 
-            {/* ABA INVENTÁRIO */}
-            {!isGestor && activeTab === 'inv' && (
-              <Card className="overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead><tr><th className={thCls}>TAG</th><th className={thCls}>Equipamento</th><th className={thCls}>Fabricante</th><th className={thCls}>Status</th></tr></thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {equipamentos.map(eq => (
-                        <tr key={eq.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                          <td className={tdCls + " font-mono text-xs font-semibold text-slate-700 dark:text-slate-200"}>{eq.tag}</td>
-                          <td className={tdCls + " font-semibold text-slate-900 dark:text-white"}>{eq.equipamento}</td>
-                          <td className={tdCls + " text-slate-500"}>{eq.fabricante}</td>
-                          <td className={tdCls}><Badge tone={eq.status === 'QUARENTENA' ? 'rose' : eq.status === 'CONDENADO' ? 'slate' : 'green'} dot>{eq.status}</Badge></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {/* ABA INVENTÁRIO (gestor e supervisor): resumo por unidade + lista filtrada */}
+            {activeTab === 'inv' && (() => {
+              const semUnidade = equipamentos.filter(eq => !eq.unidade || !unidades.includes(eq.unidade));
+              const resumo = (lista) => ({
+                total: lista.length,
+                operacional: lista.filter(eq => eq.status === 'Operacional').length,
+                quarentena: lista.filter(eq => eq.status === 'QUARENTENA').length,
+              });
+              const cartoes = [
+                { id: '', nome: 'Todas as unidades', lista: equipamentos },
+                ...unidades.map(u => ({ id: u, nome: u, lista: equipamentos.filter(eq => eq.unidade === u) })),
+                ...(semUnidade.length ? [{ id: '__sem__', nome: 'Sem unidade', lista: semUnidade }] : []),
+              ];
+              const lista = filtroUnidade === '__sem__' ? semUnidade : filtroUnidade ? equipamentos.filter(eq => eq.unidade === filtroUnidade) : equipamentos;
+              return (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {cartoes.map(c => {
+                      const r = resumo(c.lista); const ativo = filtroUnidade === c.id;
+                      return (
+                        <button key={c.id || 'todas'} onClick={() => setFiltroUnidade(c.id)} aria-pressed={ativo}
+                          className={`text-left p-4 rounded-2xl border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${ativo
+                            ? 'bg-brand-50 border-brand-300 dark:bg-brand-500/10 dark:border-brand-500/40'
+                            : 'bg-white border-slate-200 hover:border-slate-300 dark:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700'}`}>
+                          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            <Icon name={c.id ? 'anchor' : 'layers'} className="w-3.5 h-3.5" />{c.nome}
+                          </div>
+                          <p className="mt-2 font-display text-2xl font-semibold text-slate-900 dark:text-white tabular-nums">{r.total} <span className="text-sm font-sans font-medium text-slate-500">TAG{r.total === 1 ? '' : 's'}</span></p>
+                          <p className="mt-1 text-xs text-slate-500 tabular-nums">
+                            {r.operacional} operacional{r.operacional === 1 ? '' : 'is'}
+                            {r.quarentena > 0 && <span className="text-red-600 dark:text-red-400"> · {r.quarentena} em quarentena</span>}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <Card className="overflow-hidden">
+                    {lista.length === 0 ? (
+                      <EmptyState icon="package" title="Nenhuma TAG nesta unidade" text="Use o botão Adicionar TAG para cadastrar o primeiro equipamento." />
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead><tr><th className={thCls}>TAG</th><th className={thCls}>Equipamento</th><th className={thCls}>Fabricante</th><th className={thCls}>Unidade</th><th className={thCls}>Kit</th><th className={thCls}>Status</th></tr></thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                            {lista.map(eq => (
+                              <tr key={eq.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                                <td className={tdCls + " font-mono text-xs font-semibold text-slate-700 dark:text-slate-200"}>{eq.tag}</td>
+                                <td className={tdCls + " font-semibold text-slate-900 dark:text-white"}>{eq.equipamento}</td>
+                                <td className={tdCls + " text-slate-500"}>{eq.fabricante}</td>
+                                <td className={tdCls + " text-slate-600 dark:text-slate-300"}>{eq.unidade || '—'}</td>
+                                <td className={tdCls + " text-slate-500 tabular-nums"}>{eq.kit || '—'}</td>
+                                <td className={tdCls}><Badge tone={eq.status === 'QUARENTENA' ? 'rose' : eq.status === 'CONDENADO' ? 'slate' : 'green'} dot>{eq.status}</Badge></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </Card>
                 </div>
-              </Card>
-            )}
+              );
+            })()}
 
             </div>
 
@@ -1731,7 +1788,16 @@
                 <form onSubmit={submitInv} className="space-y-4">
                   <Field label="Nome do equipamento"><input required type="text" placeholder="Ex: Croll" value={novoEquipamento.equipamento} onChange={e=>setNovoEquipamento({...novoEquipamento, equipamento:e.target.value})} className={inputCls} /></Field>
                   <Field label="Fabricante"><input required type="text" placeholder="Ex: Petzl" value={novoEquipamento.fabricante} onChange={e=>setNovoEquipamento({...novoEquipamento, fabricante:e.target.value})} className={inputCls} /></Field>
-                  <Field label="TAG interno"><input required type="text" placeholder="Ex: AASJ-EQU-103" value={novoEquipamento.tag} onChange={e=>setNovoEquipamento({...novoEquipamento, tag:e.target.value})} className={inputCls + " font-mono"} /></Field>
+                  <Field label="TAG interno"><input required type="text" placeholder="Ex: AASJ-EQU-103" value={novoEquipamento.tag} onChange={e=>{ setNovoEquipamento({...novoEquipamento, tag:e.target.value}); setErroInv(''); }} className={inputCls + " font-mono"} /></Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Unidade">
+                      <select required value={novoEquipamento.unidade} onChange={e=>setNovoEquipamento({...novoEquipamento, unidade:e.target.value})} className={inputCls}>
+                        {unidades.map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Kit"><input type="text" placeholder="Ex: 10" value={novoEquipamento.kit} onChange={e=>setNovoEquipamento({...novoEquipamento, kit:e.target.value})} className={inputCls} /></Field>
+                  </div>
+                  {erroInv && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{erroInv}</p>}
                   <ModalActions onCancel={() => setShowModalInv(false)} submitLabel="Salvar" />
                 </form>
               </Modal>
